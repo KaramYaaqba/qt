@@ -1,0 +1,182 @@
+{
+  "78:1": {
+    "surah_number": 78,
+    "surah_name_ar": "النبأ",
+    "surah_name_en": "An-Naba",
+    "ayah_number": 1,
+    "text_ar": "عَمَّ يَتَسَاءَلُونَ",
+    "phonemes": "ʕ a m m a | j a t a s aː ʔ a l uː n a",
+    "phoneme_list": ["ʕ", "a", "m", "m", "a", "j", "a", "t", "a", "s", "aː", "ʔ", "a", "l", "uː", "n", "a"],
+    "total_phonemes": 17
+  },
+  "78:2": {
+    "surah_number": 78,
+    "surah_name_ar": "النبأ",
+    "surah_name_en": "An-Naba",
+    "ayah_number": 2,
+    "text_ar": "عَنِ النَّبَإِ الْعَظِيمِ",
+    "phonemes": "ʕ a n i | ʔ a n n a b a ʔ i | ʔ a l ʕ a ðˤ iː m i",
+    "phoneme_list": ["ʕ", "a", "n", "i", "ʔ", "a", "n", "n", "a", "b", "a", "ʔ", "i", "ʔ", "a", "l", "ʕ", "a", "ðˤ", "iː", "m", "i"],
+    "total_phonemes": 22
+  },
+  "78:3": {
+    "surah_number": 78,
+    "surah_name_ar": "النبأ",
+    "surah_name_en": "An-Naba",
+    "ayah_number": 3,
+    "text_ar": "الَّذِي هُمْ فِيهِ مُخْتَلِفُونَ",
+    "phonemes": "ʔ a l l a ð iː | h u m | f iː h i | m u x t a l i f uː n a",
+    "phoneme_list": ["ʔ", "a", "l", "l", "a", "ð", "iː", "h", "u", "m", "f", "iː", "h", "i", "m", "u", "x", "t", "a", "l", "i", "f", "uː", "n", "a"],
+    "total_phonemes": 25
+  },
+  "112:1": {
+    "surah_number": 112,
+    "surah_name_ar": "الإخلاص",
+    "surah_name_en": "Al-Ikhlas",
+    "ayah_number": 1,
+    "text_ar": "قُلْ هُوَ اللَّهُ أَحَدٌ",
+    "phonemes": "q u l | h u w a | ʔ a l l aː h u | ʔ a ħ a d u n",
+    "phoneme_list": ["q", "u", "l", "h", "u", "w", "a", "ʔ", "a", "l", "l", "aː", "h", "u", "ʔ", "a", "ħ", "a", "d", "u", "n"],
+    "total_phonemes": 21
+  },
+  "112:2": {
+    "surah_number": 112,
+    "surah_name_ar": "الإخلاص",
+    "surah_name_en": "Al-Ikhlas",
+    "ayah_number": 2,
+    "text_ar": "اللَّهُ الصَّمَدُ",
+    "phonemes": "ʔ a l l aː h u | ʔ a sˤ sˤ a m a d u",
+    "phoneme_list": ["ʔ", "a", "l", "l", "aː", "h", "u", "ʔ", "a", "sˤ", "sˤ", "a", "m", "a", "d", "u"],
+    "total_phonemes": 16
+  },
+  "112:3": {
+    "surah_number": 112,
+    "surah_name_ar": "الإخلاص",
+    "surah_name_en": "Al-Ikhlas",
+    "ayah_number": 3,
+    "text_ar": "لَمْ يَلِدْ وَلَمْ يُولَدْ",
+    "phonemes": "l a m | j a l i d | w a l a m | j uː l a d",
+    "phoneme_list": ["l", "a", "m", "j", "a", "l", "i", "d", "w", "a", "l", "a", "m", "j", "uː", "l", "a", "d"],
+    "total_phonemes": 18
+  },
+  "112:4": {
+    "surah_number": 112,
+    "surah_name_ar": "الإخلاص",
+    "surah_name_en": "Al-Ikhlas",
+    "ayah_number": 4,
+    "text_ar": "وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ",
+    "phonemes": "w a l a m | j a k u n | l a h uː | k u f u w a n | ʔ a ħ a d u n",
+    "phoneme_list": ["w", "a", "l", "a", "m", "j", "a", "k", "u", "n", "l", "a", "h", "uː", "k", "u", "f", "u", "w", "a", "n", "ʔ", "a", "ħ", "a", "d", "u", "n"],
+    "total_phonemes": 28
+  },
+  "113:1": {
+    "surah_number": 113,
+    "surah_name_ar": "الفلق",
+    "surah_name_en": "Al-Falaq",
+    "ayah_number": 1,
+    "text_ar": "قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ",
+    "phonemes": "q u l | ʔ a ʕ uː ð u | b i r a b b i | ʔ a l f a l a q i",
+    "phoneme_list": ["q", "u", "l", "ʔ", "a", "ʕ", "uː", "ð", "u", "b", "i", "r", "a", "b", "b", "i", "ʔ", "a", "l", "f", "a", "l", "a", "q", "i"],
+    "total_phonemes": 25
+  },
+  "113:2": {
+    "surah_number": 113,
+    "surah_name_ar": "الفلق",
+    "surah_name_en": "Al-Falaq",
+    "ayah_number": 2,
+    "text_ar": "مِن شَرِّ مَا خَلَقَ",
+    "phonemes": "m i n | ʃ a r r i | m aː | x a l a q a",
+    "phoneme_list": ["m", "i", "n", "ʃ", "a", "r", "r", "i", "m", "aː", "x", "a", "l", "a", "q", "a"],
+    "total_phonemes": 16
+  },
+  "113:3": {
+    "surah_number": 113,
+    "surah_name_ar": "الفلق",
+    "surah_name_en": "Al-Falaq",
+    "ayah_number": 3,
+    "text_ar": "وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ",
+    "phonemes": "w a m i n | ʃ a r r i | ʁ aː s i q i n | ʔ i ð aː | w a q a b a",
+    "phoneme_list": ["w", "a", "m", "i", "n", "ʃ", "a", "r", "r", "i", "ʁ", "aː", "s", "i", "q", "i", "n", "ʔ", "i", "ð", "aː", "w", "a", "q", "a", "b", "a"],
+    "total_phonemes": 27
+  },
+  "113:4": {
+    "surah_number": 113,
+    "surah_name_ar": "الفلق",
+    "surah_name_en": "Al-Falaq",
+    "ayah_number": 4,
+    "text_ar": "وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ",
+    "phonemes": "w a m i n | ʃ a r r i | ʔ a n n a f f aː θ aː t i | f iː | ʔ a l ʕ u q a d i",
+    "phoneme_list": ["w", "a", "m", "i", "n", "ʃ", "a", "r", "r", "i", "ʔ", "a", "n", "n", "a", "f", "f", "aː", "θ", "aː", "t", "i", "f", "iː", "ʔ", "a", "l", "ʕ", "u", "q", "a", "d", "i"],
+    "total_phonemes": 33
+  },
+  "113:5": {
+    "surah_number": 113,
+    "surah_name_ar": "الفلق",
+    "surah_name_en": "Al-Falaq",
+    "ayah_number": 5,
+    "text_ar": "وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ",
+    "phonemes": "w a m i n | ʃ a r r i | ħ aː s i d i n | ʔ i ð aː | ħ a s a d a",
+    "phoneme_list": ["w", "a", "m", "i", "n", "ʃ", "a", "r", "r", "i", "ħ", "aː", "s", "i", "d", "i", "n", "ʔ", "i", "ð", "aː", "ħ", "a", "s", "a", "d", "a"],
+    "total_phonemes": 27
+  },
+  "114:1": {
+    "surah_number": 114,
+    "surah_name_ar": "الناس",
+    "surah_name_en": "An-Nas",
+    "ayah_number": 1,
+    "text_ar": "قُلْ أَعُوذُ بِرَبِّ النَّاسِ",
+    "phonemes": "q u l | ʔ a ʕ uː ð u | b i r a b b i | ʔ a n n aː s i",
+    "phoneme_list": ["q", "u", "l", "ʔ", "a", "ʕ", "uː", "ð", "u", "b", "i", "r", "a", "b", "b", "i", "ʔ", "a", "n", "n", "aː", "s", "i"],
+    "total_phonemes": 23
+  },
+  "114:2": {
+    "surah_number": 114,
+    "surah_name_ar": "الناس",
+    "surah_name_en": "An-Nas",
+    "ayah_number": 2,
+    "text_ar": "مَلِكِ النَّاسِ",
+    "phonemes": "m a l i k i | ʔ a n n aː s i",
+    "phoneme_list": ["m", "a", "l", "i", "k", "i", "ʔ", "a", "n", "n", "aː", "s", "i"],
+    "total_phonemes": 13
+  },
+  "114:3": {
+    "surah_number": 114,
+    "surah_name_ar": "الناس",
+    "surah_name_en": "An-Nas",
+    "ayah_number": 3,
+    "text_ar": "إِلَـٰهِ النَّاسِ",
+    "phonemes": "ʔ i l aː h i | ʔ a n n aː s i",
+    "phoneme_list": ["ʔ", "i", "l", "aː", "h", "i", "ʔ", "a", "n", "n", "aː", "s", "i"],
+    "total_phonemes": 13
+  },
+  "114:4": {
+    "surah_number": 114,
+    "surah_name_ar": "الناس",
+    "surah_name_en": "An-Nas",
+    "ayah_number": 4,
+    "text_ar": "مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ",
+    "phonemes": "m i n | ʃ a r r i | ʔ a l w a s w aː s i | ʔ a l x a n n aː s i",
+    "phoneme_list": ["m", "i", "n", "ʃ", "a", "r", "r", "i", "ʔ", "a", "l", "w", "a", "s", "w", "aː", "s", "i", "ʔ", "a", "l", "x", "a", "n", "n", "aː", "s", "i"],
+    "total_phonemes": 28
+  },
+  "114:5": {
+    "surah_number": 114,
+    "surah_name_ar": "الناس",
+    "surah_name_en": "An-Nas",
+    "ayah_number": 5,
+    "text_ar": "الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ",
+    "phonemes": "ʔ a l l a ð iː | j u w a s w i s u | f iː | sˤ u d uː r i | ʔ a n n aː s i",
+    "phoneme_list": ["ʔ", "a", "l", "l", "a", "ð", "iː", "j", "u", "w", "a", "s", "w", "i", "s", "u", "f", "iː", "sˤ", "u", "d", "uː", "r", "i", "ʔ", "a", "n", "n", "aː", "s", "i"],
+    "total_phonemes": 31
+  },
+  "114:6": {
+    "surah_number": 114,
+    "surah_name_ar": "الناس",
+    "surah_name_en": "An-Nas",
+    "ayah_number": 6,
+    "text_ar": "مِنَ الْجِنَّةِ وَالنَّاسِ",
+    "phonemes": "m i n a | ʔ a l dʒ i n n a t i | w a ʔ a n n aː s i",
+    "phoneme_list": ["m", "i", "n", "a", "ʔ", "a", "l", "dʒ", "i", "n", "n", "a", "t", "i", "w", "a", "ʔ", "a", "n", "n", "aː", "s", "i"],
+    "total_phonemes": 23
+  }
+}

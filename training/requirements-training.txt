@@ -1,0 +1,11 @@
+# NeMo and dependencies for training
+nemo-toolkit[all]==1.22.0
+torch>=2.1.0
+torchaudio>=2.1.0
+pytorch-lightning>=2.1.0
+transformers>=4.35.0
+datasets>=2.14.0
+librosa>=0.10.0
+soundfile>=0.12.0
+onnx>=1.15.0
+onnxruntime>=1.16.0
