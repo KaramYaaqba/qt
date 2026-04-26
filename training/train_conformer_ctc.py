@@ -40,16 +40,18 @@ def create_model_config(
     Returns:
         OmegaConf configuration
     """
-    # Load vocabulary
+    # Load vocabulary — exclude <blank>; NeMo's CTC loss adds the blank internally
     vocab = []
     with open(vocab_path, "r", encoding="utf-8") as f:
         for line in f:
             parts = line.strip().split()
-            if parts:
+            if parts and parts[0] != "<blank>":
                 vocab.append(parts[0])
-    
+
+    # num_classes passed to ConvASRDecoder must equal len(vocabulary) (non-blank tokens).
+    # NeMo appends the blank class automatically, so blank must NOT be counted here.
     vocab_size = len(vocab)
-    logging.info(f"Vocabulary size: {vocab_size}")
+    logging.info(f"Vocabulary size (non-blank): {vocab_size}")
     
     config = OmegaConf.create({
         "name": "Conformer-CTC-Quran",
@@ -170,7 +172,9 @@ def create_model_config(
             "create_tensorboard_logger": True,
             "create_checkpoint_callback": True,
             "checkpoint_callback_params": {
-                "monitor": "val_wer",
+                # val_wer is word-level and misleading for a phoneme model;
+                # val_loss is the correct signal for checkpoint selection here.
+                "monitor": "val_loss",
                 "mode": "min",
                 "save_top_k": 3,
                 "always_save_nemo": True,

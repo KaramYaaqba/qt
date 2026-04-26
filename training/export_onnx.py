@@ -78,14 +78,14 @@ def export_to_onnx(
         logging.info(f"Quantized size: {quantized_size:.1f} MB")
         logging.info(f"Compression ratio: {original_size / quantized_size:.2f}x")
     
-    # Save vocabulary
+    # Save vocabulary.
+    # model.decoder.vocabulary contains only non-blank tokens; append <blank> once.
     vocab = model.decoder.vocabulary
     with open(tokens_path, "w", encoding="utf-8") as f:
         for idx, token in enumerate(vocab):
             f.write(f"{token} {idx}\n")
-        # Add blank token
         f.write(f"<blank> {len(vocab)}\n")
-    logging.info(f"Saved vocabulary to: {tokens_path}")
+    logging.info(f"Saved vocabulary to: {tokens_path} ({len(vocab) + 1} tokens incl. blank)")
     
     # Print deployment instructions
     logging.info("\n" + "=" * 50)
@@ -126,20 +126,21 @@ def verify_onnx_inference(onnx_path: str, tokens_path: str):
     # Create session
     session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
     
-    # Get input info
-    for inp in session.get_inputs():
+    # Inspect actual input shapes from the exported model before building dummies
+    inputs = session.get_inputs()
+    for inp in inputs:
         logging.info(f"Input: {inp.name}, shape: {inp.shape}, type: {inp.type}")
-    
-    # Create dummy input (1 second of audio -> ~100 frames of mel spectrogram)
-    dummy_mel = np.random.randn(1, 100, 80).astype(np.float32)
-    dummy_length = np.array([100], dtype=np.int64)
-    
-    # Run inference
+
+    # NeMo Conformer ONNX export uses (batch, features, time) = (1, 80, T)
+    n_frames = 100
+    dummy_mel    = np.random.default_rng(0).standard_normal((1, 80, n_frames)).astype(np.float32)
+    dummy_length = np.array([n_frames], dtype=np.int64)
+
     outputs = session.run(
         None,
         {
-            session.get_inputs()[0].name: dummy_mel,
-            session.get_inputs()[1].name: dummy_length,
+            inputs[0].name: dummy_mel,
+            inputs[1].name: dummy_length,
         }
     )
     
