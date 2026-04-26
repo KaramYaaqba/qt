@@ -143,16 +143,17 @@ def prepare_data(output_dir: str = "./data"):
     audio_dir = output_path / "audio"
     audio_dir.mkdir(exist_ok=True)
 
-    print("Loading EveryAyah dataset from HuggingFace...")
+    print("Loading EveryAyah dataset from HuggingFace (streaming)...")
     try:
-        dataset = load_dataset("tarteel-ai/everyayah", split="train")
+        # streaming=True avoids downloading all 40GB upfront — we filter to
+        # Juz' Amma on the fly and only save the audio we actually need (~2GB)
+        dataset = load_dataset("tarteel-ai/everyayah", split="train", streaming=True)
     except Exception as e:
         print(f"Failed to load dataset: {e}")
-        print("Make sure you have access to the dataset and are logged in:")
-        print("  pip install huggingface_hub && huggingface-cli login")
+        print("Make sure you are logged in: hf auth login")
         return
 
-    print(f"Loaded {len(dataset)} samples")
+    print("Dataset streaming started (no full download needed)")
 
     phonemizer = None
     if HAS_PHONEMIZER:

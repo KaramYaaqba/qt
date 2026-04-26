@@ -1,11 +1,12 @@
-# NeMo and dependencies for training
-nemo-toolkit[all]==1.22.0
-torch>=2.1.0
-torchaudio>=2.1.0
-pytorch-lightning>=2.1.0
-transformers>=4.35.0
+# Compatible with runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+torch==2.4.0
+torchaudio==2.4.0
+pytorch-lightning>=2.3.0
+nemo-toolkit[asr]==2.1.0
+omegaconf>=2.3.0
+transformers>=4.40.0
 datasets>=2.14.0
 librosa>=0.10.0
 soundfile>=0.12.0
-onnx>=1.15.0
-onnxruntime>=1.16.0
+onnx>=1.16.0
+onnxruntime>=1.18.0
