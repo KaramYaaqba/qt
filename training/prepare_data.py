@@ -60,17 +60,25 @@ def resample_audio(audio_array, orig_sr: int):
     )
 
 
-def get_phonemes(phonemizer, surah: int, ayah: int) -> str:
-    """Return space-separated phoneme string, or empty string on failure."""
-    if not phonemizer:
-        return ""
+def get_phonemes_from_text(phonemizer, arabic_text: str, idx: int):
+    """
+    Match arabic_text against the Quran DB, return (surah, ayah, phonemes).
+    Returns (None, None, None) if no match or surah outside Juz' Amma.
+    """
+    if not phonemizer or not arabic_text:
+        return None, None, None
     try:
-        result = phonemizer.phonemize(f"{surah}:{ayah}")
+        result = phonemizer.phonemize(ref_text=arabic_text)
+        if not result.ref:
+            return None, None, None
+        # ref is e.g. "78:1" or "78:1:1-78:1:4"
+        parts = result.ref.split(":")[: 2]
+        surah, ayah = int(parts[0]), int(parts[1])
         phonemes = result.phonemes_str(phoneme_sep=" ", word_sep=" ")
-        return phonemes.strip() if phonemes else ""
+        return surah, ayah, (phonemes.strip() if phonemes else None)
     except Exception as e:
-        print(f"Warning: Failed to phonemize {surah}:{ayah}: {e}")
-        return ""
+        print(f"Warning: text-match failed for sample {idx}: {e}")
+        return None, None, None
 
 
 def process_sample(sample, idx: int, audio_dir: Path, phonemizer):
@@ -79,28 +87,30 @@ def process_sample(sample, idx: int, audio_dir: Path, phonemizer):
 
     Returns (entry dict, split name) on success, or (None, reason) on skip.
     """
-    surah = sample.get("surah", 0)
-    ayah  = sample.get("ayah", 0)
-
-    if surah not in JUZ_AMMA_SURAHS:
-        return None, "out_of_scope"
-
-    audio      = sample.get("audio", {})
-    audio_raw  = audio.get("array")
+    arabic_text = sample.get("text", "")
+    audio       = sample.get("audio", {})
+    audio_raw   = audio.get("array")
     sample_rate = audio.get("sampling_rate", TARGET_SR)
 
     if audio_raw is None:
         return None, "no_audio"
+
+    surah, ayah, phonemes = get_phonemes_from_text(phonemizer, arabic_text, idx)
+
+    if surah is None:
+        return None, "no_match"
+
+    if surah not in JUZ_AMMA_SURAHS:
+        return None, "out_of_scope"
+
+    if not phonemes:
+        return None, "no_phonemes"
 
     try:
         audio_array = resample_audio(audio_raw, sample_rate)
     except RuntimeError as e:
         print(f"Error: {e}")
         return None, "resample_failed"
-
-    phonemes = get_phonemes(phonemizer, surah, ayah)
-    if not phonemes.strip():
-        return None, "no_phonemes"
 
     audio_filename = f"s{surah:03d}_a{ayah:03d}_{idx:06d}.wav"
     audio_path = audio_dir / audio_filename
