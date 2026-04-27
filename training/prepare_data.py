@@ -8,10 +8,11 @@ for training a Conformer-CTC model.
 Usage:
     python prepare_data.py [--output_dir ./data]
 """
+import io
 import json
 import argparse
 from pathlib import Path
-from datasets import load_dataset
+from datasets import load_dataset, Audio as datasets_Audio
 import numpy as np
 import soundfile as sf
 import sys
@@ -89,11 +90,17 @@ def process_sample(sample, idx: int, audio_dir: Path, phonemizer):
     """
     arabic_text = sample.get("text", "")
     audio       = sample.get("audio", {})
-    audio_raw   = audio.get("array")
-    sample_rate = audio.get("sampling_rate", TARGET_SR)
 
-    if audio_raw is None:
+    # With decode=False, audio is {"bytes": b"...", "path": "..."}.
+    # Decode manually with soundfile to avoid torchcodec dependency.
+    raw_bytes = audio.get("bytes") if isinstance(audio, dict) else None
+    if not raw_bytes:
         return None, "no_audio"
+    try:
+        audio_raw, sample_rate = sf.read(io.BytesIO(raw_bytes))
+    except Exception as e:
+        print(f"Warning: could not decode audio for sample {idx}: {e}")
+        return None, "decode_failed"
 
     surah, ayah, phonemes = get_phonemes_from_text(phonemizer, arabic_text, idx)
 
@@ -164,6 +171,10 @@ def prepare_data(output_dir: str = "./data"):
         return
 
     print("Dataset streaming started (no full download needed)")
+
+    # Disable automatic audio decoding — we decode raw bytes ourselves with
+    # soundfile to avoid the torchcodec dependency in newer datasets versions.
+    dataset = dataset.cast_column("audio", datasets_Audio(decode=False))
 
     phonemizer = None
     if HAS_PHONEMIZER:
