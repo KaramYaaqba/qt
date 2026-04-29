@@ -2,14 +2,12 @@
 """
 Prepare Training Data for Quran Speech-to-Phoneme Model
 
-Downloads the EveryAyah dataset and generates phoneme labels
-for training a Conformer-CTC model.
-
 Usage:
     python prepare_data.py [--output_dir ./data]
 """
 import io
 import json
+import re
 import argparse
 from pathlib import Path
 from datasets import load_dataset, Audio as datasets_Audio
@@ -17,25 +15,34 @@ import numpy as np
 import soundfile as sf
 import sys
 
-# Try to import phonemizer (needs to be cloned first)
+PHONEMIZER_PATH = Path(__file__).parent.parent / "backend" / "phonemizer"
+sys.path.insert(0, str(PHONEMIZER_PATH))
+
 try:
-    sys.path.insert(0, str(Path(__file__).parent.parent / "backend" / "phonemizer"))
     from quranic_phonemizer.phonemizer import Phonemizer
     HAS_PHONEMIZER = True
 except ImportError:
     HAS_PHONEMIZER = False
-    print("Warning: Quranic Phonemizer not found. Clone it first:")
+    print("Warning: Quranic Phonemizer not found.")
     print("  cd backend && git clone https://github.com/Hetchy/Quranic-Phonemizer.git phonemizer")
 
-
 TARGET_SR = 16000
-
-# Juz' Amma surahs
 JUZ_AMMA_SURAHS = set(range(78, 115))
-
-# Surah-based split boundaries (within Juz' Amma)
 _TEST_SURAHS = {108, 109, 110, 111, 112, 113, 114}
 _DEV_SURAHS  = {104, 105, 106, 107}
+
+# Strip tashkeel only — keeps base Arabic letters intact
+_DIACRITICS = re.compile(
+    u'[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e4\u06e7\u06e8\u06ea-\u06ed]'
+)
+# Normalize alef variants so DB and dataset spellings match
+_ALEF = re.compile(r'[آأإٱ]')
+
+
+def normalize(text: str) -> str:
+    text = _ALEF.sub('ا', text)
+    text = _DIACRITICS.sub('', text)
+    return ' '.join(text.split())
 
 
 def assign_split(surah: int) -> str:
@@ -46,70 +53,67 @@ def assign_split(surah: int) -> str:
     return "train"
 
 
-def resample_audio(audio_array, orig_sr: int):
-    """Return audio resampled to TARGET_SR. Raises RuntimeError if librosa missing."""
+def build_ayah_lookup(db_path: Path) -> dict:
+    """Build normalize(ayah_text) -> (surah, ayah) for Juz Amma. O(1) lookup per sample."""
+    with open(db_path, encoding="utf-8") as f:
+        db = json.load(f)
+
+    ayahs: dict[str, list] = {}
+    for entry in db.values():
+        surah = int(entry["surah"])
+        if surah not in JUZ_AMMA_SURAHS:
+            continue
+        key = f"{entry['surah']}:{entry['ayah']}"
+        ayahs.setdefault(key, []).append((int(entry["word"]), entry["text"]))
+
+    lookup = {}
+    for ref, words in ayahs.items():
+        words.sort(key=lambda x: x[0])
+        full_text = " ".join(w for _, w in words)
+        surah, ayah = (int(x) for x in ref.split(":"))
+        lookup[normalize(full_text)] = (surah, ayah)
+
+    return lookup
+
+
+def resample_audio(audio_array, orig_sr: int) -> np.ndarray:
     if orig_sr == TARGET_SR:
         return np.array(audio_array, dtype=np.float32)
     try:
         import librosa
     except ImportError:
-        raise RuntimeError("librosa is required for resampling. pip install librosa")
-    return librosa.resample(
-        np.array(audio_array, dtype=np.float32),
-        orig_sr=orig_sr,
-        target_sr=TARGET_SR,
-    )
+        raise RuntimeError("librosa required: pip install librosa")
+    return librosa.resample(np.array(audio_array, dtype=np.float32),
+                            orig_sr=orig_sr, target_sr=TARGET_SR)
 
 
-def get_phonemes_from_text(phonemizer, arabic_text: str, idx: int):
-    """
-    Match arabic_text against the Quran DB, return (surah, ayah, phonemes).
-    Returns (None, None, None) if no match or surah outside Juz' Amma.
-    """
-    if not phonemizer or not arabic_text:
-        return None, None, None
+def get_phonemes(phonemizer, surah: int, ayah: int) -> str:
     try:
-        result = phonemizer.phonemize(ref_text=arabic_text)
-        if not result.ref:
-            return None, None, None
-        # ref is e.g. "78:1" or "78:1:1-78:1:4"
-        parts = result.ref.split(":")[: 2]
-        surah, ayah = int(parts[0]), int(parts[1])
+        result = phonemizer.phonemize(f"{surah}:{ayah}")
         phonemes = result.phonemes_str(phoneme_sep=" ", word_sep=" ")
-        return surah, ayah, (phonemes.strip() if phonemes else None)
+        return phonemes.strip() if phonemes else ""
     except Exception as e:
-        print(f"Warning: text-match failed for sample {idx}: {e}")
-        return None, None, None
+        print(f"Warning: phonemize({surah}:{ayah}) failed: {e}")
+        return ""
 
 
-def process_sample(sample, idx: int, audio_dir: Path, phonemizer):
-    """
-    Process one dataset sample.
+def process_sample(sample, idx: int, audio_dir: Path, phonemizer, ayah_lookup: dict):
+    match = ayah_lookup.get(normalize(sample.get("text", "")))
+    if match is None:
+        return None, "no_match"
+    surah, ayah = match
 
-    Returns (entry dict, split name) on success, or (None, reason) on skip.
-    """
-    arabic_text = sample.get("text", "")
-    audio       = sample.get("audio", {})
-
-    # With decode=False, audio is {"bytes": b"...", "path": "..."}.
-    # Decode manually with soundfile to avoid torchcodec dependency.
+    audio     = sample.get("audio", {})
     raw_bytes = audio.get("bytes") if isinstance(audio, dict) else None
     if not raw_bytes:
         return None, "no_audio"
     try:
         audio_raw, sample_rate = sf.read(io.BytesIO(raw_bytes))
     except Exception as e:
-        print(f"Warning: could not decode audio for sample {idx}: {e}")
+        print(f"Warning: audio decode failed sample {idx}: {e}")
         return None, "decode_failed"
 
-    surah, ayah, phonemes = get_phonemes_from_text(phonemizer, arabic_text, idx)
-
-    if surah is None:
-        return None, "no_match"
-
-    if surah not in JUZ_AMMA_SURAHS:
-        return None, "out_of_scope"
-
+    phonemes = get_phonemes(phonemizer, surah, ayah)
     if not phonemes:
         return None, "no_phonemes"
 
@@ -120,31 +124,28 @@ def process_sample(sample, idx: int, audio_dir: Path, phonemizer):
         return None, "resample_failed"
 
     audio_filename = f"s{surah:03d}_a{ayah:03d}_{idx:06d}.wav"
-    audio_path = audio_dir / audio_filename
+    audio_path     = audio_dir / audio_filename
     sf.write(audio_path, audio_array, TARGET_SR)
 
-    duration = len(audio_array) / TARGET_SR
-    entry = {
+    return {
         "audio_filepath": str(audio_path.absolute()),
-        "duration": round(duration, 3),
-        "text": phonemes,
-        "surah": surah,
-        "ayah": ayah,
-    }
-    return entry, assign_split(surah)
+        "duration":       round(len(audio_array) / TARGET_SR, 3),
+        "text":           phonemes,
+        "surah":          surah,
+        "ayah":           ayah,
+    }, assign_split(surah)
 
 
 def save_manifests(manifests: dict, output_path: Path):
     for split, entries in manifests.items():
-        manifest_path = output_path / f"manifest_{split}.json"
-        with open(manifest_path, "w", encoding="utf-8") as f:
+        path = output_path / f"manifest_{split}.json"
+        with open(path, "w", encoding="utf-8") as f:
             for entry in entries:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        print(f"Saved {split} manifest: {len(entries)} samples -> {manifest_path}")
+        print(f"Saved {split}: {len(entries)} samples -> {path}")
 
 
 def extract_vocabulary(manifests: dict) -> list:
-    """Extract unique phoneme tokens from manifests."""
     tokens = set()
     for entries in manifests.values():
         for entry in entries:
@@ -157,48 +158,42 @@ def extract_vocabulary(manifests: dict) -> list:
 def prepare_data(output_dir: str = "./data"):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    audio_dir = output_path / "audio"
-    audio_dir.mkdir(exist_ok=True)
+    (output_path / "audio").mkdir(exist_ok=True)
 
-    print("Loading EveryAyah dataset from HuggingFace (streaming)...")
-    try:
-        # streaming=True avoids downloading all 40GB upfront — we filter to
-        # Juz' Amma on the fly and only save the audio we actually need (~2GB)
-        dataset = load_dataset("tarteel-ai/everyayah", split="train", streaming=True)
-    except Exception as e:
-        print(f"Failed to load dataset: {e}")
-        print("Make sure you are logged in: hf auth login")
+    if not HAS_PHONEMIZER:
+        print("Error: Phonemizer unavailable.")
         return
 
-    print("Dataset streaming started (no full download needed)")
+    db_path = PHONEMIZER_PATH / "quranic_phonemizer" / "resources" / "Quran.json"
+    print("Building Juz Amma ayah lookup table...")
+    ayah_lookup = build_ayah_lookup(db_path)
+    print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
 
-    # Disable automatic audio decoding — we decode raw bytes ourselves with
-    # soundfile to avoid the torchcodec dependency in newer datasets versions.
-    dataset = dataset.cast_column("audio", datasets_Audio(decode=False))
+    print("Initializing Quranic Phonemizer...")
+    phonemizer = Phonemizer()
 
-    phonemizer = None
-    if HAS_PHONEMIZER:
-        print("Initializing Quranic Phonemizer...")
-        phonemizer = Phonemizer()
-    else:
-        print("Error: Phonemizer unavailable — all samples will be skipped.")
+    print("Loading EveryAyah dataset (streaming)...")
+    try:
+        dataset = load_dataset("tarteel-ai/everyayah", split="train", streaming=True)
+        dataset = dataset.cast_column("audio", datasets_Audio(decode=False))
+    except Exception as e:
+        print(f"Failed to load dataset: {e}")
         return
 
     manifests = {"train": [], "dev": [], "test": []}
     processed = skipped = 0
 
     for idx, sample in enumerate(dataset):
-        entry, result = process_sample(sample, idx, audio_dir, phonemizer)
+        entry, result = process_sample(sample, idx, output_path / "audio", phonemizer, ayah_lookup)
         if entry is None:
             skipped += 1
             continue
         manifests[result].append(entry)
         processed += 1
         if processed % 100 == 0:
-            print(f"Processed {processed} samples...")
+            print(f"Processed {processed} samples (scanned {idx + 1} total)...")
 
-    print(f"\nProcessed {processed} samples, skipped {skipped}")
-
+    print(f"\nDone: {processed} processed, {skipped} skipped")
     save_manifests(manifests, output_path)
 
     vocab = extract_vocabulary(manifests)
@@ -206,14 +201,12 @@ def prepare_data(output_dir: str = "./data"):
     with open(vocab_path, "w", encoding="utf-8") as f:
         for i, token in enumerate(vocab):
             f.write(f"{token} {i}\n")
-    print(f"Saved vocabulary: {len(vocab)} tokens -> {vocab_path}")
-
+    print(f"Vocabulary: {len(vocab)} tokens -> {vocab_path}")
     print("\nData preparation complete!")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Prepare training data")
-    parser.add_argument("--output_dir", type=str, default="./data",
-                        help="Output directory for processed data")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_dir", default="./data")
     args = parser.parse_args()
     prepare_data(args.output_dir)
