@@ -73,26 +73,19 @@ def assign_split(idx: int) -> str:
     return "train"
 
 
-def build_ayah_lookup(db_path: Path) -> dict:
-    """Build normalize(ayah_text) -> (surah, ayah) for target surahs. O(1) per sample."""
-    with open(db_path, encoding="utf-8") as f:
-        db = json.load(f)
-
-    ayahs: dict[str, list] = {}
-    for entry in db.values():
-        surah = int(entry["surah"])
-        if surah not in TARGET_SURAHS:
-            continue
-        key = f"{entry['surah']}:{entry['ayah']}"
-        ayahs.setdefault(key, []).append((int(entry["word"]), entry["text"]))
-
+def build_ayah_lookup(phonemizer) -> dict:
+    """Build normalize(ayah_text) -> (surah, ayah) for target surahs using phonemizer API."""
     lookup = {}
-    for ref, words in ayahs.items():
-        words.sort(key=lambda x: x[0])
-        full_text = " ".join(w for _, w in words)
-        surah, ayah = (int(x) for x in ref.split(":"))
-        lookup[normalize(full_text)] = (surah, ayah)
-
+    for surah in sorted(TARGET_SURAHS):
+        for ayah in range(1, 20):
+            try:
+                result = phonemizer.phonemize(f"{surah}:{ayah}")
+                text = result._text
+                if not text:
+                    break
+                lookup[normalize(text)] = (surah, ayah)
+            except Exception:
+                break
     return lookup
 
 
@@ -201,13 +194,12 @@ def prepare_data(output_dir: str = "./data"):
         print("Error: Phonemizer unavailable.")
         return
 
-    db_path = PHONEMIZER_PATH / "quranic_phonemizer" / "resources" / "Quran.json"
-    print("Building ayah lookup for surahs 109-114...")
-    ayah_lookup = build_ayah_lookup(db_path)
-    print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
-
     print("Initializing Quranic Phonemizer...")
     phonemizer = Phonemizer()
+
+    print("Building ayah lookup for surahs 109-114...")
+    ayah_lookup = build_ayah_lookup(phonemizer)
+    print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
 
     # Pre-generate all phoneme labels (only 29 ayahs — instant)
     print("Pre-generating phoneme labels for 29 ayahs...")
