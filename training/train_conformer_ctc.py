@@ -38,36 +38,34 @@ def load_vocab(vocab_path: str) -> list[str]:
 
 def build_tokenizer_dir(vocab: list[str], output_path: Path) -> Path:
     """
-    Build a character-level SentencePiece tokenizer from Quranic phoneme vocab.
-
-    The pretrained model uses a BPE tokenizer — we replace it with a simple
-    character tokenizer where each phoneme symbol is one token.
+    Build a BPE SentencePiece tokenizer where every Quranic phoneme is a
+    single token. We use user_defined_symbols so SPM never splits them.
     """
     import sentencepiece as spm
 
     tokenizer_dir = output_path / "tokenizer"
     tokenizer_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write a flat corpus where each phoneme is a "word" on its own line
-    # SentencePiece will treat each as a character-level unit
+    # Corpus: each phoneme repeated many times so SPM has enough data
     corpus_path = tokenizer_dir / "corpus.txt"
     with open(corpus_path, "w", encoding="utf-8") as f:
-        for token in vocab:
-            f.write(token + "\n")
+        for _ in range(200):
+            for token in vocab:
+                f.write(token + "\n")
 
     model_prefix = str(tokenizer_dir / "tokenizer")
 
     spm.SentencePieceTrainer.train(
         input=str(corpus_path),
         model_prefix=model_prefix,
-        vocab_size=len(vocab) + 3,  # +3 for <unk>, <s>, </s>
+        vocab_size=128,             # larger than needed — SPM requires headroom
         character_coverage=1.0,
-        model_type="char",          # character-level = each phoneme is one token
+        model_type="bpe",
         pad_id=0,
         unk_id=1,
         bos_id=2,
         eos_id=3,
-        user_defined_symbols=list(vocab),
+        user_defined_symbols=list(vocab),  # each phoneme becomes one token
     )
 
     logging.info(f"Built tokenizer at: {tokenizer_dir}")
