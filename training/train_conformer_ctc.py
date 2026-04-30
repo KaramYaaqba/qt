@@ -17,9 +17,9 @@ from omegaconf import OmegaConf
 
 # NeMo 2.x uses lightning (not pytorch_lightning) internally
 try:
-    from lightning.pytorch import Trainer
+    from lightning.pytorch import Trainer, Callback
 except ImportError:
-    from pytorch_lightning import Trainer
+    from pytorch_lightning import Trainer, Callback
 
 from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
@@ -27,6 +27,19 @@ from nemo.utils.exp_manager import exp_manager
 
 
 PRETRAINED_MODEL = "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
+ENCODER_FREEZE_EPOCHS = 10  # train decoder only for first N epochs
+
+
+class EncoderUnfreezeCallback(Callback):
+    """Freeze encoder at start, unfreeze after ENCODER_FREEZE_EPOCHS."""
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        if trainer.current_epoch == 0:
+            pl_module.encoder.freeze()
+            logging.info("Encoder frozen — training decoder only for first epochs")
+        elif trainer.current_epoch == ENCODER_FREEZE_EPOCHS:
+            pl_module.encoder.unfreeze()
+            logging.info(f"Encoder unfrozen at epoch {trainer.current_epoch} — full fine-tuning")
 
 
 def load_vocab(vocab_path: str) -> list[str]:
@@ -240,7 +253,10 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
         "resume_ignore_no_checkpoint": True,
     })
 
-    trainer = Trainer(**OmegaConf.to_container(trainer_cfg, resolve=True))
+    trainer = Trainer(
+        **OmegaConf.to_container(trainer_cfg, resolve=True),
+        callbacks=[EncoderUnfreezeCallback()],
+    )
     exp_manager(trainer, exp_manager_cfg)
 
     logging.info("Starting fine-tuning...")
