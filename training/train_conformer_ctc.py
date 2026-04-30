@@ -2,21 +2,22 @@
 """
 Fine-tune Arabic FastConformer for Quranic Phoneme Recognition
 
-Starts from nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0 (pretrained on
-Arabic with diacritics) and fine-tunes the decoder head + upper encoder layers
-on the last 6 surahs of Juz' Amma using non-Arabic speaker recordings.
+Starts from nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0 and fine-tunes
+on 6 surahs of Juz' Amma using non-Arabic speaker recordings (RetaSy dataset).
 
 Usage:
     python train_conformer_ctc.py [--data_dir ./data] [--output_dir ./output]
 """
 import argparse
+import os
+import tempfile
 from pathlib import Path
 
 import torch
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
 
-from nemo.collections.asr.models import EncDecCTCModel
+from nemo.collections.asr.models import EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
@@ -35,6 +36,44 @@ def load_vocab(vocab_path: str) -> list[str]:
     return vocab
 
 
+def build_tokenizer_dir(vocab: list[str], output_path: Path) -> Path:
+    """
+    Build a character-level SentencePiece tokenizer from Quranic phoneme vocab.
+
+    The pretrained model uses a BPE tokenizer — we replace it with a simple
+    character tokenizer where each phoneme symbol is one token.
+    """
+    import sentencepiece as spm
+
+    tokenizer_dir = output_path / "tokenizer"
+    tokenizer_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write a flat corpus where each phoneme is a "word" on its own line
+    # SentencePiece will treat each as a character-level unit
+    corpus_path = tokenizer_dir / "corpus.txt"
+    with open(corpus_path, "w", encoding="utf-8") as f:
+        for token in vocab:
+            f.write(token + "\n")
+
+    model_prefix = str(tokenizer_dir / "tokenizer")
+
+    spm.SentencePieceTrainer.train(
+        input=str(corpus_path),
+        model_prefix=model_prefix,
+        vocab_size=len(vocab) + 3,  # +3 for <unk>, <s>, </s>
+        character_coverage=1.0,
+        model_type="char",          # character-level = each phoneme is one token
+        pad_id=0,
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        user_defined_symbols=list(vocab),
+    )
+
+    logging.info(f"Built tokenizer at: {tokenizer_dir}")
+    return tokenizer_dir
+
+
 def train(data_dir: str = "./data", output_dir: str = "./output"):
     data_path   = Path(data_dir)
     output_path = Path(output_dir)
@@ -51,19 +90,26 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     vocab = load_vocab(str(vocab_path))
     logging.info(f"Vocabulary size (non-blank): {len(vocab)}")
 
+    # Build character-level tokenizer for Quranic phonemes
+    logging.info("Building Quranic phoneme tokenizer...")
+    tokenizer_dir = build_tokenizer_dir(vocab, output_path)
+
     # Load pretrained Arabic model
     logging.info(f"Loading pretrained model: {PRETRAINED_MODEL}")
-    model = EncDecCTCModel.from_pretrained(PRETRAINED_MODEL)
+    model = EncDecHybridRNNTCTCBPEModel.from_pretrained(PRETRAINED_MODEL)
 
-    # Swap decoder to Quranic phoneme vocabulary
-    logging.info("Swapping decoder to Quranic phoneme vocabulary...")
-    model.change_vocabulary(new_vocabulary=vocab)
+    # Swap tokenizer to Quranic phoneme vocabulary
+    logging.info("Swapping tokenizer to Quranic phoneme vocabulary...")
+    model.change_vocabulary(
+        new_tokenizer_dir=str(tokenizer_dir),
+        new_tokenizer_type="char",
+    )
 
     # Update data configs
     model.cfg.train_ds = OmegaConf.create({
         "manifest_filepath": str(train_manifest),
         "sample_rate":       16000,
-        "batch_size":        8,      # Small — we have few hundred samples
+        "batch_size":        8,
         "shuffle":           True,
         "num_workers":       2,
         "pin_memory":        True,
@@ -85,10 +131,10 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
 
     # Fine-tuning optimizer — lower LR than scratch training
     model.cfg.optim = OmegaConf.create({
-        "name":          "adamw",
-        "lr":            1e-4,
-        "betas":         [0.9, 0.98],
-        "weight_decay":  1e-3,
+        "name":         "adamw",
+        "lr":           1e-4,
+        "betas":        [0.9, 0.98],
+        "weight_decay": 1e-3,
         "sched": {
             "name":          "CosineAnnealing",
             "warmup_steps":  100,
@@ -100,16 +146,16 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     use_gpu = torch.cuda.is_available()
 
     trainer_cfg = OmegaConf.create({
-        "devices":                1,
-        "accelerator":            "gpu" if use_gpu else "cpu",
-        "max_epochs":             30,
-        "accumulate_grad_batches": 4,   # Effective batch = 8 * 4 = 32
-        "gradient_clip_val":      1.0,
-        "precision":              "16-mixed" if use_gpu else "32-true",
-        "log_every_n_steps":      5,
-        "val_check_interval":     1.0,
-        "enable_checkpointing":   True,
-        "default_root_dir":       str(output_path),
+        "devices":                 1,
+        "accelerator":             "gpu" if use_gpu else "cpu",
+        "max_epochs":              30,
+        "accumulate_grad_batches": 4,
+        "gradient_clip_val":       1.0,
+        "precision":               "16-mixed" if use_gpu else "32-true",
+        "log_every_n_steps":       5,
+        "val_check_interval":      1.0,
+        "enable_checkpointing":    True,
+        "default_root_dir":        str(output_path),
     })
 
     exp_manager_cfg = OmegaConf.create({
@@ -118,13 +164,13 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
         "create_tensorboard_logger":  True,
         "create_checkpoint_callback": True,
         "checkpoint_callback_params": {
-            "monitor":           "val_loss",
-            "mode":              "min",
-            "save_top_k":        3,
-            "always_save_nemo":  True,
+            "monitor":          "val_loss",
+            "mode":             "min",
+            "save_top_k":       3,
+            "always_save_nemo": True,
         },
-        "resume_if_exists":             True,
-        "resume_ignore_no_checkpoint":  True,
+        "resume_if_exists":            True,
+        "resume_ignore_no_checkpoint": True,
     })
 
     trainer = pl.Trainer(**OmegaConf.to_container(trainer_cfg, resolve=True))
