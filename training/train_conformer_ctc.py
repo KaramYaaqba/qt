@@ -230,7 +230,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
         "max_epochs":              50,
         "accumulate_grad_batches": 4,
         "gradient_clip_val":       1.0,
-        "precision":               "32-true",  # fp16 causes nan with random preprocessor init
+        "precision":               "16-mixed" if use_gpu else "32-true",
         "log_every_n_steps":       5,
         "val_check_interval":      1.0,
         "enable_checkpointing":    False,  # exp_manager creates its own checkpointer
