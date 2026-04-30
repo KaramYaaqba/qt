@@ -211,7 +211,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
         "precision":               "16-mixed" if use_gpu else "32-true",
         "log_every_n_steps":       5,
         "val_check_interval":      1.0,
-        "enable_checkpointing":    True,
+        "enable_checkpointing":    False,  # exp_manager creates its own checkpointer
         "default_root_dir":        str(output_path),
         "logger":                  False,  # exp_manager creates its own logger
     })
