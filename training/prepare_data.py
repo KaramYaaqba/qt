@@ -2,6 +2,9 @@
 """
 Prepare Training Data for Quran Speech-to-Phoneme Model
 
+Streams RetaSy/quranic_audio_dataset (non-Arabic speakers) and generates
+phoneme labels for the last 6 surahs of Juz' Amma.
+
 Usage:
     python prepare_data.py [--output_dir ./data]
 """
@@ -27,15 +30,31 @@ except ImportError:
     print("  cd backend && git clone https://github.com/Hetchy/Quranic-Phonemizer.git phonemizer")
 
 TARGET_SR = 16000
-JUZ_AMMA_SURAHS = set(range(78, 115))
-_TEST_SURAHS = {108, 109, 110, 111, 112, 113, 114}
-_DEV_SURAHS  = {104, 105, 106, 107}
+
+# Last 6 surahs only — focused PoC for non-Arabic speaker feedback
+TARGET_SURAHS = {109, 110, 111, 112, 113, 114}
+
+# RetaSy uses English surah names — map to surah numbers
+SURAH_NAME_TO_NUMBER = {
+    "Al-Kafiroon": 109,
+    "An-Nasr":     110,
+    "Al-Masad":    111,
+    "Al-Ikhlas":   112,
+    "Al-Falaq":    113,
+    "An-Nas":      114,
+}
+
+# Only keep recordings labeled as correct or unlabeled (None = not yet reviewed)
+KEEP_LABELS = {"correct", None}
+
+# Split: 80% train, 10% dev, 10% test — random by sample index
+_DEV_MOD  = 9   # idx % 10 == 9  -> dev
+_TEST_MOD = 8   # idx % 10 == 8  -> test
 
 # Strip tashkeel only — keeps base Arabic letters intact
 _DIACRITICS = re.compile(
-    u'[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e4\u06e7\u06e8\u06ea-\u06ed]'
+    u'[ؐ-ًؚ-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
 )
-# Normalize alef variants so DB and dataset spellings match
 _ALEF = re.compile(r'[آأإٱ]')
 
 
@@ -45,23 +64,24 @@ def normalize(text: str) -> str:
     return ' '.join(text.split())
 
 
-def assign_split(surah: int) -> str:
-    if surah in _TEST_SURAHS:
+def assign_split(idx: int) -> str:
+    r = idx % 10
+    if r == _TEST_MOD:
         return "test"
-    if surah in _DEV_SURAHS:
+    if r == _DEV_MOD:
         return "dev"
     return "train"
 
 
 def build_ayah_lookup(db_path: Path) -> dict:
-    """Build normalize(ayah_text) -> (surah, ayah) for Juz Amma. O(1) lookup per sample."""
+    """Build normalize(ayah_text) -> (surah, ayah) for target surahs. O(1) per sample."""
     with open(db_path, encoding="utf-8") as f:
         db = json.load(f)
 
     ayahs: dict[str, list] = {}
     for entry in db.values():
         surah = int(entry["surah"])
-        if surah not in JUZ_AMMA_SURAHS:
+        if surah not in TARGET_SURAHS:
             continue
         key = f"{entry['surah']}:{entry['ayah']}"
         ayahs.setdefault(key, []).append((int(entry["word"]), entry["text"]))
@@ -98,11 +118,26 @@ def get_phonemes(phonemizer, surah: int, ayah: int) -> str:
 
 
 def process_sample(sample, idx: int, audio_dir: Path, phonemizer, ayah_lookup: dict):
-    match = ayah_lookup.get(normalize(sample.get("text", "")))
+    """Returns (entry dict, split) on success or (None, reason) on skip."""
+    # Filter by surah name
+    surah_name = sample.get("Surah", "")
+    if surah_name not in SURAH_NAME_TO_NUMBER:
+        return None, "out_of_scope"
+
+    # Filter by quality label
+    label = sample.get("final_label")
+    if label not in KEEP_LABELS:
+        return None, f"label_{label}"
+
+    # Match ayah text to get surah:ayah numbers
+    ayah_text = sample.get("Aya", "")
+    match = ayah_lookup.get(normalize(ayah_text))
     if match is None:
+        # Fallback: use surah name mapping + try to infer from text match
         return None, "no_match"
     surah, ayah = match
 
+    # Decode audio
     audio     = sample.get("audio", {})
     raw_bytes = audio.get("bytes") if isinstance(audio, dict) else None
     if not raw_bytes:
@@ -113,10 +148,12 @@ def process_sample(sample, idx: int, audio_dir: Path, phonemizer, ayah_lookup: d
         print(f"Warning: audio decode failed sample {idx}: {e}")
         return None, "decode_failed"
 
+    # Get phoneme labels
     phonemes = get_phonemes(phonemizer, surah, ayah)
     if not phonemes:
         return None, "no_phonemes"
 
+    # Resample to 16kHz
     try:
         audio_array = resample_audio(audio_raw, sample_rate)
     except RuntimeError as e:
@@ -133,7 +170,7 @@ def process_sample(sample, idx: int, audio_dir: Path, phonemizer, ayah_lookup: d
         "text":           phonemes,
         "surah":          surah,
         "ayah":           ayah,
-    }, assign_split(surah)
+    }, assign_split(idx)
 
 
 def save_manifests(manifests: dict, output_path: Path):
@@ -165,16 +202,28 @@ def prepare_data(output_dir: str = "./data"):
         return
 
     db_path = PHONEMIZER_PATH / "quranic_phonemizer" / "resources" / "Quran.json"
-    print("Building Juz Amma ayah lookup table...")
+    print("Building ayah lookup for surahs 109-114...")
     ayah_lookup = build_ayah_lookup(db_path)
     print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
 
     print("Initializing Quranic Phonemizer...")
     phonemizer = Phonemizer()
 
-    print("Loading EveryAyah dataset (streaming)...")
+    # Pre-generate all phoneme labels (only 29 ayahs — instant)
+    print("Pre-generating phoneme labels for 29 ayahs...")
+    phoneme_cache = {}
+    for surah in sorted(TARGET_SURAHS):
+        for ayah in range(1, 20):  # upper bound; stops when phonemizer raises
+            ph = get_phonemes(phonemizer, surah, ayah)
+            if not ph:
+                break
+            phoneme_cache[f"{surah}:{ayah}"] = ph
+            print(f"  {surah}:{ayah} -> {ph[:50]}...")
+    print(f"Cached {len(phoneme_cache)} ayah phoneme sequences")
+
+    print("\nLoading RetaSy dataset (streaming)...")
     try:
-        dataset = load_dataset("tarteel-ai/everyayah", split="train", streaming=True)
+        dataset = load_dataset("RetaSy/quranic_audio_dataset", split="train", streaming=True)
         dataset = dataset.cast_column("audio", datasets_Audio(decode=False))
     except Exception as e:
         print(f"Failed to load dataset: {e}")
@@ -182,18 +231,21 @@ def prepare_data(output_dir: str = "./data"):
 
     manifests = {"train": [], "dev": [], "test": []}
     processed = skipped = 0
+    skip_reasons: dict[str, int] = {}
 
     for idx, sample in enumerate(dataset):
         entry, result = process_sample(sample, idx, output_path / "audio", phonemizer, ayah_lookup)
         if entry is None:
             skipped += 1
+            skip_reasons[result] = skip_reasons.get(result, 0) + 1
             continue
         manifests[result].append(entry)
         processed += 1
-        if processed % 100 == 0:
-            print(f"Processed {processed} samples (scanned {idx + 1} total)...")
+        print(f"  [{processed}] surah={entry['surah']} ayah={entry['ayah']} "
+              f"dur={entry['duration']}s split={result}")
 
     print(f"\nDone: {processed} processed, {skipped} skipped")
+    print("Skip reasons:", skip_reasons)
     save_manifests(manifests, output_path)
 
     vocab = extract_vocabulary(manifests)
