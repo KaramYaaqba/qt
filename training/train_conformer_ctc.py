@@ -208,6 +208,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
         "val_check_interval":      1.0,
         "enable_checkpointing":    True,
         "default_root_dir":        str(output_path),
+        "logger":                  False,  # exp_manager creates its own logger
     })
 
     exp_manager_cfg = OmegaConf.create({
