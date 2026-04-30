@@ -1,28 +1,23 @@
 #!/bin/bash
 set -e
 
-# Download model from HuggingFace if not present
-MODEL_DIR="/app/model"
-MODEL_FILE="$MODEL_DIR/model.onnx"
-TOKENS_FILE="$MODEL_DIR/tokens.txt"
+MODEL_FILE="/app/model/model.onnx"
+TOKENS_FILE="/app/model/tokens.txt"
 
 if [ ! -f "$MODEL_FILE" ]; then
-    echo "Downloading model from HuggingFace..."
-    pip install huggingface_hub -q
+    echo "Downloading model from private HuggingFace repo..."
     python -c "
 from huggingface_hub import hf_hub_download
-import shutil, os
+import os, shutil
 
-repo_id = os.environ.get('HF_MODEL_REPO', '')
-if not repo_id:
-    print('HF_MODEL_REPO not set, starting with mock mode')
-    exit(0)
+repo_id = os.environ['HF_MODEL_REPO']
+token   = os.environ['HF_TOKEN']
 
 os.makedirs('/app/model', exist_ok=True)
-print(f'Downloading from {repo_id}...')
-hf_hub_download(repo_id=repo_id, filename='model.onnx', local_dir='/app/model')
-hf_hub_download(repo_id=repo_id, filename='tokens.txt', local_dir='/app/model')
-print('Model downloaded successfully')
+for filename in ['model.onnx', 'tokens.txt']:
+    path = hf_hub_download(repo_id=repo_id, filename=filename, token=token, local_dir='/app/model')
+    print(f'Downloaded {filename}')
+print('Model ready')
 "
 fi
 

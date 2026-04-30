@@ -4,3 +4,7 @@ training/data/
 
 # Frontend dependencies
 frontend/node_modules/
+
+# Model files — stored privately on HuggingFace, never in git
+backend/model/model.onnx
+backend/model/model.int8.onnx
