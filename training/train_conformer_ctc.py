@@ -13,8 +13,13 @@ import argparse
 from pathlib import Path
 
 import torch
-import pytorch_lightning as pl
 from omegaconf import OmegaConf
+
+# NeMo 2.x uses lightning (not pytorch_lightning) internally
+try:
+    from lightning.pytorch import Trainer
+except ImportError:
+    from pytorch_lightning import Trainer
 
 from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
@@ -226,7 +231,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
         "resume_ignore_no_checkpoint": True,
     })
 
-    trainer = pl.Trainer(**OmegaConf.to_container(trainer_cfg, resolve=True))
+    trainer = Trainer(**OmegaConf.to_container(trainer_cfg, resolve=True))
     exp_manager(trainer, exp_manager_cfg)
 
     logging.info("Starting fine-tuning...")
