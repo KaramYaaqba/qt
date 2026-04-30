@@ -144,15 +144,19 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
         PRETRAINED_MODEL, map_location="cpu"
     )
 
-    # Copy encoder weights — these are the valuable pretrained Arabic representations
-    logging.info("Transplanting pretrained encoder weights...")
-    missing, unexpected = model.encoder.load_state_dict(
-        pretrained.encoder.state_dict(), strict=False
-    )
-    if missing:
-        logging.warning(f"Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}")
-    if unexpected:
-        logging.warning(f"Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+    # Transplant compatible encoder weights key-by-key, skipping shape mismatches
+    logging.info("Transplanting pretrained encoder weights (compatible layers only)...")
+    pretrained_state = pretrained.encoder.state_dict()
+    model_state = model.encoder.state_dict()
+    transferred = skipped_keys = 0
+    for key, param in pretrained_state.items():
+        if key in model_state and model_state[key].shape == param.shape:
+            model_state[key].copy_(param)
+            transferred += 1
+        else:
+            skipped_keys += 1
+    model.encoder.load_state_dict(model_state)
+    logging.info(f"Transferred {transferred} layers, skipped {skipped_keys} (shape mismatch)")
 
     # Also transplant preprocessor weights if compatible
     try:
