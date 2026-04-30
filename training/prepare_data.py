@@ -68,7 +68,7 @@ _DEV_MOD  = 9
 _TEST_MOD = 8
 
 _DIACRITICS = re.compile(
-    u'[ؐ-ًؚ-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
+    u'[ً-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
 )
 _ALEF = re.compile(r'[آأإٱ]')
 
