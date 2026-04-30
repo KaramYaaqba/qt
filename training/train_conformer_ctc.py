@@ -205,7 +205,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     trainer_cfg = OmegaConf.create({
         "devices":                 1,
         "accelerator":             "gpu" if use_gpu else "cpu",
-        "max_epochs":              30,
+        "max_epochs":              150,
         "accumulate_grad_batches": 4,
         "gradient_clip_val":       1.0,
         "precision":               "32-true",  # fp16 causes nan with random preprocessor init
