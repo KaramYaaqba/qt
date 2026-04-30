@@ -1,3 +1,6 @@
 
 # Training data — audio files are large, stream from HuggingFace instead
 training/data/
+
+# Frontend dependencies
+frontend/node_modules/
