@@ -3,7 +3,6 @@ builder = "dockerfile"
 dockerfilePath = "backend/Dockerfile"
 
 [deploy]
-startCommand = "bash start.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 600
 restartPolicyType = "on_failure"

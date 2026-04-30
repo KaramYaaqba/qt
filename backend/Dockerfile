@@ -11,7 +11,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
-COPY scripts/ ./scripts/
 COPY start.sh ./start.sh
 RUN chmod +x start.sh && mkdir -p app/data model
 
@@ -20,4 +19,4 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV USE_MOCK=false
 
-CMD ["./start.sh"]
+CMD ["bash", "start.sh"]
