@@ -2,8 +2,11 @@
 """
 Prepare Training Data for Quran Speech-to-Phoneme Model
 
-Streams RetaSy/quranic_audio_dataset (non-Arabic speakers) and generates
-phoneme labels for the last 6 surahs of Juz' Amma.
+Streams two datasets:
+1. RetaSy/quranic_audio_dataset — non-Arabic speakers (primary)
+2. tarteel-ai/everyayah — professional reciters (supplementary)
+
+Targets the last 20 surahs of Juz' Amma (95–114).
 
 Usage:
     python prepare_data.py [--output_dir ./data]
@@ -31,29 +34,41 @@ except ImportError:
 
 TARGET_SR = 16000
 
-# Last 6 surahs only — focused PoC for non-Arabic speaker feedback
-TARGET_SURAHS = {109, 110, 111, 112, 113, 114}
+# Last 20 surahs
+TARGET_SURAHS = set(range(95, 115))
 
-# RetaSy uses English surah names — map to surah numbers
+# RetaSy English surah name -> surah number
 SURAH_NAME_TO_NUMBER = {
-    "Al-Kafiroon": 109,
-    "An-Nasr":     110,
-    "Al-Masad":    111,
-    "Al-Ikhlas":   112,
-    "Al-Falaq":    113,
-    "An-Nas":      114,
+    "Al-Tin":       95,
+    "Al-Alaq":      96,
+    "Al-Qadr":      97,
+    "Al-Bayyinah":  98,
+    "Az-Zalzalah":  99,
+    "Al-Adiyat":    100,
+    "Al-Qariah":    101,
+    "At-Takathur":  102,
+    "Al-Asr":       103,
+    "Al-Humazah":   104,
+    "Al-Fil":       105,
+    "Quraish":      106,
+    "Al-Maaoon":    107,
+    "Al-Kauthar":   108,
+    "Al-Kafiroon":  109,
+    "An-Nasr":      110,
+    "Al-Masad":     111,
+    "Al-Ikhlas":    112,
+    "Al-Falaq":     113,
+    "An-Nas":       114,
 }
 
-# Only keep recordings labeled as correct or unlabeled (None = not yet reviewed)
+# Only keep recordings labeled as correct or unlabeled
 KEEP_LABELS = {"correct", None}
 
-# Split: 80% train, 10% dev, 10% test — random by sample index
-_DEV_MOD  = 9   # idx % 10 == 9  -> dev
-_TEST_MOD = 8   # idx % 10 == 8  -> test
+_DEV_MOD  = 9
+_TEST_MOD = 8
 
-# Strip tashkeel only — keeps base Arabic letters intact
 _DIACRITICS = re.compile(
-    u'[ؐ-ًؚ-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
+    u'[ؐ-ًؚ-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
 )
 _ALEF = re.compile(r'[آأإٱ]')
 
@@ -74,10 +89,10 @@ def assign_split(idx: int) -> str:
 
 
 def build_ayah_lookup(phonemizer) -> dict:
-    """Build normalize(ayah_text) -> (surah, ayah) for target surahs using phonemizer API."""
+    """Build normalize(ayah_text) -> (surah, ayah) for target surahs."""
     lookup = {}
     for surah in sorted(TARGET_SURAHS):
-        for ayah in range(1, 20):
+        for ayah in range(1, 30):
             try:
                 result = phonemizer.phonemize(f"{surah}:{ayah}")
                 text = result._text
@@ -110,60 +125,69 @@ def get_phonemes(phonemizer, surah: int, ayah: int) -> str:
         return ""
 
 
-def process_sample(sample, idx: int, audio_dir: Path, phonemizer, ayah_lookup: dict):
-    """Returns (entry dict, split) on success or (None, reason) on skip."""
-    # Filter by surah name
-    surah_name = sample.get("Surah", "")
-    if surah_name not in SURAH_NAME_TO_NUMBER:
-        return None, "out_of_scope"
-
-    # Filter by quality label
-    label = sample.get("final_label")
-    if label not in KEEP_LABELS:
-        return None, f"label_{label}"
-
-    # Match ayah text to get surah:ayah numbers
-    ayah_text = sample.get("Aya", "")
-    match = ayah_lookup.get(normalize(ayah_text))
-    if match is None:
-        # Fallback: use surah name mapping + try to infer from text match
-        return None, "no_match"
-    surah, ayah = match
-
-    # Decode audio
-    audio     = sample.get("audio", {})
+def decode_audio(audio: dict, idx: int):
+    """Decode raw audio bytes to numpy array + sample rate."""
     raw_bytes = audio.get("bytes") if isinstance(audio, dict) else None
     if not raw_bytes:
-        return None, "no_audio"
+        return None, None
     try:
-        audio_raw, sample_rate = sf.read(io.BytesIO(raw_bytes))
+        arr, sr = sf.read(io.BytesIO(raw_bytes))
+        return arr, sr
     except Exception as e:
         print(f"Warning: audio decode failed sample {idx}: {e}")
-        return None, "decode_failed"
+        return None, None
 
-    # Get phoneme labels
-    phonemes = get_phonemes(phonemizer, surah, ayah)
-    if not phonemes:
-        return None, "no_phonemes"
 
-    # Resample to 16kHz
+def make_entry(audio_raw, sample_rate, surah, ayah, phonemes, idx, audio_dir):
     try:
         audio_array = resample_audio(audio_raw, sample_rate)
     except RuntimeError as e:
         print(f"Error: {e}")
-        return None, "resample_failed"
-
-    audio_filename = f"s{surah:03d}_a{ayah:03d}_{idx:06d}.wav"
-    audio_path     = audio_dir / audio_filename
+        return None
+    audio_path = audio_dir / f"s{surah:03d}_a{ayah:03d}_{idx:06d}.wav"
     sf.write(audio_path, audio_array, TARGET_SR)
-
     return {
         "audio_filepath": str(audio_path.absolute()),
         "duration":       round(len(audio_array) / TARGET_SR, 3),
         "text":           phonemes,
         "surah":          surah,
         "ayah":           ayah,
-    }, assign_split(idx)
+    }
+
+
+def process_retasy(sample, idx, audio_dir, phonemizer, ayah_lookup):
+    surah_name = sample.get("Surah", "")
+    if surah_name not in SURAH_NAME_TO_NUMBER:
+        return None, "out_of_scope"
+    if sample.get("final_label") not in KEEP_LABELS:
+        return None, f"label_{sample.get('final_label')}"
+    match = ayah_lookup.get(normalize(sample.get("Aya", "")))
+    if match is None:
+        return None, "no_match"
+    surah, ayah = match
+    audio_raw, sr = decode_audio(sample.get("audio", {}), idx)
+    if audio_raw is None:
+        return None, "no_audio"
+    phonemes = get_phonemes(phonemizer, surah, ayah)
+    if not phonemes:
+        return None, "no_phonemes"
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
+    return (entry, assign_split(idx)) if entry else (None, "resample_failed")
+
+
+def process_everyayah(sample, idx, audio_dir, phonemizer, ayah_lookup):
+    match = ayah_lookup.get(normalize(sample.get("text", "")))
+    if match is None:
+        return None, "no_match"
+    surah, ayah = match
+    audio_raw, sr = decode_audio(sample.get("audio", {}), idx)
+    if audio_raw is None:
+        return None, "no_audio"
+    phonemes = get_phonemes(phonemizer, surah, ayah)
+    if not phonemes:
+        return None, "no_phonemes"
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
+    return (entry, assign_split(idx)) if entry else (None, "resample_failed")
 
 
 def save_manifests(manifests: dict, output_path: Path):
@@ -188,7 +212,8 @@ def extract_vocabulary(manifests: dict) -> list:
 def prepare_data(output_dir: str = "./data"):
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    (output_path / "audio").mkdir(exist_ok=True)
+    audio_dir = output_path / "audio"
+    audio_dir.mkdir(exist_ok=True)
 
     if not HAS_PHONEMIZER:
         print("Error: Phonemizer unavailable.")
@@ -197,47 +222,56 @@ def prepare_data(output_dir: str = "./data"):
     print("Initializing Quranic Phonemizer...")
     phonemizer = Phonemizer()
 
-    print("Building ayah lookup for surahs 109-114...")
+    print(f"Building ayah lookup for surahs 95-114...")
     ayah_lookup = build_ayah_lookup(phonemizer)
     print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
 
-    # Pre-generate all phoneme labels (only 29 ayahs — instant)
-    print("Pre-generating phoneme labels for 29 ayahs...")
-    phoneme_cache = {}
-    for surah in sorted(TARGET_SURAHS):
-        for ayah in range(1, 20):  # upper bound; stops when phonemizer raises
-            ph = get_phonemes(phonemizer, surah, ayah)
-            if not ph:
-                break
-            phoneme_cache[f"{surah}:{ayah}"] = ph
-            print(f"  {surah}:{ayah} -> {ph[:50]}...")
-    print(f"Cached {len(phoneme_cache)} ayah phoneme sequences")
-
-    print("\nLoading RetaSy dataset (streaming)...")
-    try:
-        dataset = load_dataset("RetaSy/quranic_audio_dataset", split="train", streaming=True)
-        dataset = dataset.cast_column("audio", datasets_Audio(decode=False))
-    except Exception as e:
-        print(f"Failed to load dataset: {e}")
-        return
-
     manifests = {"train": [], "dev": [], "test": []}
     processed = skipped = 0
-    skip_reasons: dict[str, int] = {}
 
-    for idx, sample in enumerate(dataset):
-        entry, result = process_sample(sample, idx, output_path / "audio", phonemizer, ayah_lookup)
-        if entry is None:
-            skipped += 1
-            skip_reasons[result] = skip_reasons.get(result, 0) + 1
-            continue
-        manifests[result].append(entry)
-        processed += 1
-        print(f"  [{processed}] surah={entry['surah']} ayah={entry['ayah']} "
-              f"dur={entry['duration']}s split={result}")
+    # --- Dataset 1: RetaSy (non-native speakers) ---
+    print("\nLoading RetaSy dataset (non-native speakers)...")
+    try:
+        ds_retasy = load_dataset("RetaSy/quranic_audio_dataset", split="train", streaming=True)
+        ds_retasy = ds_retasy.cast_column("audio", datasets_Audio(decode=False))
+        for idx, sample in enumerate(ds_retasy):
+            entry, result = process_retasy(sample, idx, audio_dir, phonemizer, ayah_lookup)
+            if entry is None:
+                skipped += 1
+                continue
+            manifests[result].append(entry)
+            processed += 1
+            if processed % 100 == 0:
+                print(f"  RetaSy: {processed} processed (scanned {idx+1} total)...")
+    except Exception as e:
+        print(f"RetaSy load failed: {e}")
 
-    print(f"\nDone: {processed} processed, {skipped} skipped")
-    print("Skip reasons:", skip_reasons)
+    retasy_count = processed
+    print(f"RetaSy done: {retasy_count} samples")
+
+    # --- Dataset 2: everyayah (professional reciters, supplementary) ---
+    print("\nLoading everyayah dataset (professional reciters)...")
+    try:
+        ds_every = load_dataset("tarteel-ai/everyayah", split="train", streaming=True)
+        ds_every = ds_every.cast_column("audio", datasets_Audio(decode=False))
+        every_processed = 0
+        for idx, sample in enumerate(ds_every):
+            # Use offset idx to avoid filename collisions with RetaSy
+            entry, result = process_everyayah(sample, idx + 500000, audio_dir, phonemizer, ayah_lookup)
+            if entry is None:
+                skipped += 1
+                continue
+            manifests[result].append(entry)
+            processed += 1
+            every_processed += 1
+            if every_processed % 500 == 0:
+                print(f"  everyayah: {every_processed} processed (scanned {idx+1} total)...")
+    except Exception as e:
+        print(f"everyayah load failed: {e}")
+
+    print(f"everyayah done: {processed - retasy_count} samples")
+    print(f"\nTotal: {processed} processed, {skipped} skipped")
+
     save_manifests(manifests, output_path)
 
     vocab = extract_vocabulary(manifests)

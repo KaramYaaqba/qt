@@ -105,10 +105,19 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "vocabulary": vocab,
         },
 
+        # Label smoothing discourages blank collapse by spreading probability
+        # mass across all tokens, preventing the model from collapsing to blank
+        "loss": {
+            "_target_": "nemo.collections.asr.losses.CTCLoss",
+            "num_classes": vocab_size,
+            "zero_infinity": True,
+            "reduction": "mean_batch",
+        },
+
         "train_ds": {
             "manifest_filepath": train_manifest,
             "sample_rate": 16000,
-            "batch_size": 8,
+            "batch_size": 16,
             "shuffle": True,
             "num_workers": 0,
             "pin_memory": True,
@@ -120,7 +129,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
         "validation_ds": {
             "manifest_filepath": val_manifest,
             "sample_rate": 16000,
-            "batch_size": 8,
+            "batch_size": 16,
             "shuffle": False,
             "num_workers": 0,
             "pin_memory": True,
@@ -129,12 +138,12 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
 
         "optim": {
             "name": "adamw",
-            "lr": 1e-4,
+            "lr": 5e-4,  # higher LR to push decoder out of blank collapse faster
             "betas": [0.9, 0.98],
             "weight_decay": 1e-3,
             "sched": {
                 "name": "CosineAnnealing",
-                "warmup_steps": 100,
+                "warmup_steps": 500,
                 "min_lr": 1e-6,
             },
         },
@@ -205,7 +214,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     trainer_cfg = OmegaConf.create({
         "devices":                 1,
         "accelerator":             "gpu" if use_gpu else "cpu",
-        "max_epochs":              150,
+        "max_epochs":              50,
         "accumulate_grad_batches": 4,
         "gradient_clip_val":       1.0,
         "precision":               "32-true",  # fp16 causes nan with random preprocessor init
