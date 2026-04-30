@@ -230,7 +230,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     exp_manager(trainer, exp_manager_cfg)
 
     logging.info("Starting fine-tuning...")
-    trainer.fit(model)
+    trainer.fit(model, model._train_dl, model._validation_dl)
 
     final_path = output_path / "fastconformer_quran_6surahs.nemo"
     model.save_to(str(final_path))
