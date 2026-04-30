@@ -3,7 +3,7 @@
 MODEL_FILE="/app/model/model.onnx"
 
 if [ ! -f "$MODEL_FILE" ]; then
-    echo "Downloading model from HuggingFace..."
+    echo "Downloading model.onnx from HuggingFace..."
     python -c "
 import os, sys
 try:
@@ -14,11 +14,9 @@ try:
         print('HF_MODEL_REPO or HF_TOKEN not set — starting in mock mode')
         sys.exit(0)
     os.makedirs('/app/model', exist_ok=True)
-    for f in ['model.onnx', 'tokens.txt']:
-        print(f'Downloading {f}...')
-        hf_hub_download(repo_id=repo_id, filename=f, token=token, local_dir='/app/model')
-        print(f'{f} done')
-    print('Model ready')
+    print('Downloading model.onnx...')
+    hf_hub_download(repo_id=repo_id, filename='model.onnx', token=token, local_dir='/app/model')
+    print('model.onnx ready')
 except Exception as e:
     print(f'Model download failed: {e}')
     print('Starting in mock mode')
