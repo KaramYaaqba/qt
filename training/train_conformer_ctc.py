@@ -38,34 +38,41 @@ def load_vocab(vocab_path: str) -> list[str]:
 
 def build_tokenizer_dir(vocab: list[str], output_path: Path) -> Path:
     """
-    Build a BPE SentencePiece tokenizer where every Quranic phoneme is a
-    single token. We use user_defined_symbols so SPM never splits them.
+    Build a SentencePiece tokenizer from Quranic phoneme vocab.
+
+    We create a large synthetic corpus of phoneme sequences so BPE has
+    enough data, then use user_defined_symbols to pin every phoneme as
+    an atomic token that BPE will never split.
     """
     import sentencepiece as spm
+    import random
 
     tokenizer_dir = output_path / "tokenizer"
     tokenizer_dir.mkdir(parents=True, exist_ok=True)
 
-    # Corpus: each phoneme repeated many times so SPM has enough data
+    # Build synthetic corpus: random phoneme sequences (5-20 phonemes per line)
+    # BPE needs variety — single-token lines cause the seg fault
+    random.seed(42)
     corpus_path = tokenizer_dir / "corpus.txt"
     with open(corpus_path, "w", encoding="utf-8") as f:
-        for _ in range(200):
-            for token in vocab:
-                f.write(token + "\n")
+        for _ in range(5000):
+            length = random.randint(5, 20)
+            line = " ".join(random.choices(vocab, k=length))
+            f.write(line + "\n")
 
     model_prefix = str(tokenizer_dir / "tokenizer")
 
     spm.SentencePieceTrainer.train(
         input=str(corpus_path),
         model_prefix=model_prefix,
-        vocab_size=128,             # larger than needed — SPM requires headroom
+        vocab_size=256,
         character_coverage=1.0,
         model_type="bpe",
         pad_id=0,
         unk_id=1,
         bos_id=2,
         eos_id=3,
-        user_defined_symbols=list(vocab),  # each phoneme becomes one token
+        user_defined_symbols=list(vocab),
     )
 
     logging.info(f"Built tokenizer at: {tokenizer_dir}")
