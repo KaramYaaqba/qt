@@ -2,22 +2,21 @@
 """
 Fine-tune Arabic FastConformer for Quranic Phoneme Recognition
 
-Starts from nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0 and fine-tunes
-on 6 surahs of Juz' Amma using non-Arabic speaker recordings (RetaSy dataset).
+Loads the pretrained Arabic FastConformer encoder weights and attaches a
+fresh CTC decoder with our Quranic phoneme vocabulary (40 tokens).
+This avoids BPE tokenizer issues — CTC uses a simple character vocab.
 
 Usage:
     python train_conformer_ctc.py [--data_dir ./data] [--output_dir ./output]
 """
 import argparse
-import os
-import tempfile
 from pathlib import Path
 
 import torch
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
 
-from nemo.collections.asr.models import EncDecHybridRNNTCTCBPEModel
+from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
@@ -36,47 +35,138 @@ def load_vocab(vocab_path: str) -> list[str]:
     return vocab
 
 
-def build_tokenizer_dir(vocab: list[str], output_path: Path) -> Path:
+def build_ctc_model(vocab: list[str], train_manifest: str,
+                    val_manifest: str) -> EncDecCTCModel:
     """
-    Build a SentencePiece tokenizer from Quranic phoneme vocab.
-
-    We create a large synthetic corpus of phoneme sequences so BPE has
-    enough data, then use user_defined_symbols to pin every phoneme as
-    an atomic token that BPE will never split.
+    Build a Conformer-CTC model with Quranic phoneme vocabulary,
+    then transplant the pretrained Arabic encoder weights into it.
     """
-    import sentencepiece as spm
-    import random
+    use_gpu = torch.cuda.is_available()
+    vocab_size = len(vocab)
 
-    tokenizer_dir = output_path / "tokenizer"
-    tokenizer_dir.mkdir(parents=True, exist_ok=True)
+    # Build fresh CTC model config matching FastConformer-Large architecture
+    cfg = OmegaConf.create({
+        "sample_rate": 16000,
+        "labels": vocab,
 
-    # Build synthetic corpus: random phoneme sequences (5-20 phonemes per line)
-    # BPE needs variety — single-token lines cause the seg fault
-    random.seed(42)
-    corpus_path = tokenizer_dir / "corpus.txt"
-    with open(corpus_path, "w", encoding="utf-8") as f:
-        for _ in range(5000):
-            length = random.randint(5, 20)
-            line = " ".join(random.choices(vocab, k=length))
-            f.write(line + "\n")
+        "preprocessor": {
+            "_target_": "nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor",
+            "sample_rate": 16000,
+            "normalize": "per_feature",
+            "window_size": 0.025,
+            "window_stride": 0.01,
+            "window": "hann",
+            "features": 128,       # FastConformer uses 128 mel bins
+            "n_fft": 512,
+            "frame_splicing": 1,
+            "dither": 0.00001,
+            "pad_to": 0,
+        },
 
-    model_prefix = str(tokenizer_dir / "tokenizer")
+        "spec_augment": {
+            "_target_": "nemo.collections.asr.modules.SpectrogramAugmentation",
+            "freq_masks": 2,
+            "freq_width": 27,
+            "time_masks": 5,
+            "time_width": 0.05,
+        },
 
-    spm.SentencePieceTrainer.train(
-        input=str(corpus_path),
-        model_prefix=model_prefix,
-        vocab_size=256,
-        character_coverage=1.0,
-        model_type="bpe",
-        pad_id=0,
-        unk_id=1,
-        bos_id=2,
-        eos_id=3,
-        user_defined_symbols=list(vocab),
+        "encoder": {
+            "_target_": "nemo.collections.asr.modules.ConformerEncoder",
+            "feat_in": 128,
+            "feat_out": -1,
+            "n_layers": 17,
+            "d_model": 512,
+            "subsampling": "dw_striding",
+            "subsampling_factor": 8,
+            "subsampling_conv_channels": 256,
+            "ff_expansion_factor": 4,
+            "self_attention_model": "rel_pos_local_attn",
+            "n_heads": 8,
+            "att_context_size": [128, 128],
+            "xscaling": True,
+            "untie_biases": True,
+            "pos_emb_max_len": 5000,
+            "conv_kernel_size": 9,
+            "dropout": 0.1,
+            "dropout_emb": 0.0,
+            "dropout_att": 0.1,
+        },
+
+        "decoder": {
+            "_target_": "nemo.collections.asr.modules.ConvASRDecoder",
+            "feat_in": 512,
+            "num_classes": vocab_size,
+            "vocabulary": vocab,
+        },
+
+        "train_ds": {
+            "manifest_filepath": train_manifest,
+            "sample_rate": 16000,
+            "batch_size": 8,
+            "shuffle": True,
+            "num_workers": 2,
+            "pin_memory": True,
+            "trim_silence": False,
+            "max_duration": 30.0,
+            "min_duration": 0.5,
+        },
+
+        "validation_ds": {
+            "manifest_filepath": val_manifest,
+            "sample_rate": 16000,
+            "batch_size": 8,
+            "shuffle": False,
+            "num_workers": 2,
+            "pin_memory": True,
+            "trim_silence": False,
+        },
+
+        "optim": {
+            "name": "adamw",
+            "lr": 1e-4,
+            "betas": [0.9, 0.98],
+            "weight_decay": 1e-3,
+            "sched": {
+                "name": "CosineAnnealing",
+                "warmup_steps": 100,
+                "min_lr": 1e-6,
+            },
+        },
+    })
+
+    logging.info("Initializing CTC model with Quranic phoneme vocab...")
+    model = EncDecCTCModel(cfg=cfg)
+
+    # Load pretrained Arabic model and transplant encoder weights
+    logging.info(f"Loading pretrained encoder from: {PRETRAINED_MODEL}")
+    pretrained = EncDecHybridRNNTCTCBPEModel.from_pretrained(
+        PRETRAINED_MODEL, map_location="cpu"
     )
 
-    logging.info(f"Built tokenizer at: {tokenizer_dir}")
-    return tokenizer_dir
+    # Copy encoder weights — these are the valuable pretrained Arabic representations
+    logging.info("Transplanting pretrained encoder weights...")
+    missing, unexpected = model.encoder.load_state_dict(
+        pretrained.encoder.state_dict(), strict=False
+    )
+    if missing:
+        logging.warning(f"Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+    if unexpected:
+        logging.warning(f"Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+
+    # Also transplant preprocessor weights if compatible
+    try:
+        model.preprocessor.load_state_dict(
+            pretrained.preprocessor.state_dict(), strict=True
+        )
+        logging.info("Preprocessor weights transplanted successfully")
+    except Exception as e:
+        logging.warning(f"Could not transplant preprocessor weights: {e} — using random init")
+
+    del pretrained
+    torch.cuda.empty_cache() if use_gpu else None
+
+    return model
 
 
 def train(data_dir: str = "./data", output_dir: str = "./output"):
@@ -95,58 +185,11 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     vocab = load_vocab(str(vocab_path))
     logging.info(f"Vocabulary size (non-blank): {len(vocab)}")
 
-    # Build character-level tokenizer for Quranic phonemes
-    logging.info("Building Quranic phoneme tokenizer...")
-    tokenizer_dir = build_tokenizer_dir(vocab, output_path)
-
-    # Load pretrained Arabic model
-    logging.info(f"Loading pretrained model: {PRETRAINED_MODEL}")
-    model = EncDecHybridRNNTCTCBPEModel.from_pretrained(PRETRAINED_MODEL)
-
-    # Swap tokenizer to Quranic phoneme vocabulary
-    logging.info("Swapping tokenizer to Quranic phoneme vocabulary...")
-    model.change_vocabulary(
-        new_tokenizer_dir=str(tokenizer_dir),
-        new_tokenizer_type="char",
+    model = build_ctc_model(
+        vocab=vocab,
+        train_manifest=str(train_manifest),
+        val_manifest=str(val_manifest),
     )
-
-    # Update data configs
-    model.cfg.train_ds = OmegaConf.create({
-        "manifest_filepath": str(train_manifest),
-        "sample_rate":       16000,
-        "batch_size":        8,
-        "shuffle":           True,
-        "num_workers":       2,
-        "pin_memory":        True,
-        "trim_silence":      False,
-        "max_duration":      30.0,
-        "min_duration":      0.5,
-    })
-    model.cfg.validation_ds = OmegaConf.create({
-        "manifest_filepath": str(val_manifest),
-        "sample_rate":       16000,
-        "batch_size":        8,
-        "shuffle":           False,
-        "num_workers":       2,
-        "pin_memory":        True,
-        "trim_silence":      False,
-    })
-    model.setup_training_data(model.cfg.train_ds)
-    model.setup_validation_data(model.cfg.validation_ds)
-
-    # Fine-tuning optimizer — lower LR than scratch training
-    model.cfg.optim = OmegaConf.create({
-        "name":         "adamw",
-        "lr":           1e-4,
-        "betas":        [0.9, 0.98],
-        "weight_decay": 1e-3,
-        "sched": {
-            "name":          "CosineAnnealing",
-            "warmup_steps":  100,
-            "min_lr":        1e-6,
-        },
-    })
-    model.setup_optimization(model.cfg.optim)
 
     use_gpu = torch.cuda.is_available()
 
