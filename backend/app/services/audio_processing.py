@@ -112,11 +112,11 @@ def _normalize_audio(audio: np.ndarray) -> np.ndarray:
     """
     if audio.dtype != np.float32:
         audio = audio.astype(np.float32)
-        
+
     max_val = np.abs(audio).max()
     if max_val > 0:
         audio = audio / max_val
-        
+
     return audio
 
 

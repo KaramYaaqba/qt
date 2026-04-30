@@ -30,6 +30,7 @@ export function RecitationPage() {
     audioBlob,
     startRecording,
     stopRecording,
+    resetRecorder,
     error: recordError,
     duration,
   } = useAudioRecorder({ maxDuration: 30 });
@@ -40,6 +41,8 @@ export function RecitationPage() {
     setSelectedAyah(ayah);
     setResults(null);
     setError(null);
+    setSelectedError(null);
+    resetRecorder();
 
     try {
       setLoading(true);
@@ -55,7 +58,7 @@ export function RecitationPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resetRecorder]);
 
   // Process audio when recording completes
   useEffect(() => {

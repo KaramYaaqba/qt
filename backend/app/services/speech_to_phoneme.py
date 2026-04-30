@@ -70,15 +70,21 @@ class SpeechToPhonemeService:
             fmax=8000
         )
         
-        # Convert to log scale
-        log_mel = np.log(mel + 1e-9).T  # Shape: (time_steps, 80)
-        
-        # Normalize per feature
-        log_mel = (log_mel - log_mel.mean(axis=0)) / (log_mel.std(axis=0) + 1e-9)
+        # Convert to log scale — shape: (80, time_steps)
+        log_mel = np.log(mel + 1e-9)
 
-        # Prepare inputs for ONNX model
+        # Normalize per feature using only the speech portion (before padding)
+        log_mel = (log_mel - log_mel.mean(axis=1, keepdims=True)) / (log_mel.std(axis=1, keepdims=True) + 1e-9)
+
+        # Pad 1s of zeros AFTER normalization so model sees complete final phonemes
+        # without distorting the per-feature statistics
+        pad_frames = int(1.0 / 0.01)  # 1 second = 100 frames at 10ms stride
+        pad = np.zeros((log_mel.shape[0], pad_frames), dtype=np.float32)
+        log_mel = np.concatenate([log_mel, pad], axis=1)
+
+        # NeMo FastConformer expects (batch, features, time) = (1, 80, T)
         input_signal = log_mel[np.newaxis, :, :].astype(np.float32)
-        input_length = np.array([log_mel.shape[0]], dtype=np.int64)
+        input_length = np.array([log_mel.shape[1]], dtype=np.int64)
 
         # Run inference
         outputs = self.session.run(

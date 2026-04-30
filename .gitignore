@@ -8,3 +8,10 @@ frontend/node_modules/
 # Model files — stored privately on HuggingFace, never in git
 backend/model/model.onnx
 backend/model/model.int8.onnx
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# Package lock
+frontend/package-lock.json

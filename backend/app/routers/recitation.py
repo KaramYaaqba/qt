@@ -68,7 +68,8 @@ async def check_recitation(
         logger.info(f"Processing audio: {len(audio_bytes)} bytes, type: {content_type}")
         
         audio_array = process_audio(audio_bytes, content_type)
-        
+        logger.info(f"Audio processed: duration={len(audio_array)/16000:.2f}s, shape={audio_array.shape}, max_amplitude={abs(audio_array).max():.3f}")
+
         # Validate audio
         is_valid, error_msg = validate_audio(
             audio_array,
@@ -83,20 +84,22 @@ async def check_recitation(
             hint_surah=surah,
             hint_ayah=ayah
         )
-        logger.info(f"Predicted {len(predicted_phonemes)} phonemes")
+        logger.info(f"Predicted {len(predicted_phonemes)} phonemes: {predicted_phonemes}")
         
         # Get reference data
         reference = reference_service.get_reference(surah, ayah)
-        expected_phonemes = reference["phoneme_list"]
+        expected_phonemes = [p for p in reference["phoneme_list"] if p != "Q"]
         reference_text = reference["text_ar"]
-        
-        logger.info(f"Expected {len(expected_phonemes)} phonemes")
-        
+        letter_phoneme_map = reference.get("letter_phoneme_map")
+
+        logger.info(f"Expected {len(expected_phonemes)} phonemes: {expected_phonemes}")
+
         # Align and get errors
         alignment_result = alignment_service.align(
             predicted=predicted_phonemes,
             expected=expected_phonemes,
-            reference_text=reference_text
+            reference_text=reference_text,
+            letter_phoneme_map=letter_phoneme_map,
         )
         
         # Convert to response models
