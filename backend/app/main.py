@@ -71,8 +71,10 @@ async def lifespan(app: FastAPI):
         )
     else:
         # Download model if not present (blocks startup until complete)
+        import os
+        logger.info(f"MODEL_PATH exists: {MODEL_PATH.exists()} — path: {MODEL_PATH}")
+        logger.info(f"HF_TOKEN set: {bool(os.environ.get('HF_TOKEN'))} HF_MODEL_REPO: {os.environ.get('HF_MODEL_REPO', 'NOT SET')}")
         if not MODEL_PATH.exists():
-            import os
             hf_token = os.environ.get("HF_TOKEN", "")
             hf_repo = os.environ.get("HF_MODEL_REPO", "")
             if hf_token and hf_repo:
