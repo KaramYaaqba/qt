@@ -70,17 +70,35 @@ async def lifespan(app: FastAPI):
             reference_data_path=str(PHONEME_DATA_PATH)
         )
     else:
+        # Download model if not present (blocks startup until complete)
+        if not MODEL_PATH.exists():
+            import os
+            hf_token = os.environ.get("HF_TOKEN", "")
+            hf_repo = os.environ.get("HF_MODEL_REPO", "")
+            if hf_token and hf_repo:
+                logger.info(f"Downloading model from {hf_repo} ...")
+                from huggingface_hub import hf_hub_download
+                hf_hub_download(
+                    repo_id=hf_repo,
+                    filename="model.onnx",
+                    token=hf_token,
+                    local_dir=str(MODEL_PATH.parent),
+                )
+                logger.info("model.onnx downloaded successfully")
+            else:
+                logger.error("HF_TOKEN and HF_MODEL_REPO not set — cannot download model")
+
         if not MODEL_PATH.exists() or not TOKENS_PATH.exists():
-            logger.warning(f"Model files not found at {MODEL_PATH} — service will be unavailable until model downloads")
-            speech_service = None
-        else:
-            logger.info(f"Loading ONNX model from {MODEL_PATH}")
-            speech_service = create_service(
-                use_mock=False,
-                model_path=str(MODEL_PATH),
-                tokens_path=str(TOKENS_PATH)
-            )
-            logger.info("ONNX model loaded successfully")
+            logger.error(f"Model files not found at {MODEL_PATH}")
+            raise RuntimeError("Model files not found. Set USE_MOCK=true or provide HF_TOKEN + HF_MODEL_REPO.")
+
+        logger.info(f"Loading ONNX model from {MODEL_PATH}")
+        speech_service = create_service(
+            use_mock=False,
+            model_path=str(MODEL_PATH),
+            tokens_path=str(TOKENS_PATH)
+        )
+        logger.info("ONNX model loaded successfully")
     
     logger.info("API startup complete!")
     
