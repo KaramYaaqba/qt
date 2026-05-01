@@ -11,8 +11,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
+COPY model/ ./model/
 COPY start.sh ./start.sh
-RUN mkdir -p app/data model && chmod +x start.sh
+RUN mkdir -p app/data && chmod +x start.sh
 
 EXPOSE 8000
 
