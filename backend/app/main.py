@@ -71,17 +71,16 @@ async def lifespan(app: FastAPI):
         )
     else:
         if not MODEL_PATH.exists() or not TOKENS_PATH.exists():
-            logger.error(f"Model files not found at {MODEL_PATH}")
-            logger.error("Set USE_MOCK=true or provide trained model files")
-            raise RuntimeError("Model files not found. Set USE_MOCK=true or train a model.")
-        
-        logger.info(f"Loading ONNX model from {MODEL_PATH}")
-        speech_service = create_service(
-            use_mock=False,
-            model_path=str(MODEL_PATH),
-            tokens_path=str(TOKENS_PATH)
-        )
-        logger.info("ONNX model loaded successfully")
+            logger.warning(f"Model files not found at {MODEL_PATH} — service will be unavailable until model downloads")
+            speech_service = None
+        else:
+            logger.info(f"Loading ONNX model from {MODEL_PATH}")
+            speech_service = create_service(
+                use_mock=False,
+                model_path=str(MODEL_PATH),
+                tokens_path=str(TOKENS_PATH)
+            )
+            logger.info("ONNX model loaded successfully")
     
     logger.info("API startup complete!")
     

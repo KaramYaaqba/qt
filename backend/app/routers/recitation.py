@@ -53,6 +53,12 @@ async def check_recitation(
     
     **Max duration:** 30 seconds
     """
+    if speech_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded yet. Please try again in a minute."
+        )
+
     # Validate ayah exists
     if not reference_service.ayah_exists(surah, ayah):
         raise HTTPException(
