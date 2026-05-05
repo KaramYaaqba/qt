@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Generate Phoneme Data for Juz' Amma
+Generate Phoneme Data for the Last 2 Juz's
 
 This script uses the Quranic Phonemizer to generate phoneme transcriptions
-for all ayahs in Juz' Amma (Surahs 78-114).
+for all ayahs in Juz' 29 (Surahs 67-77) and Juz' 30 / Juz' Amma (Surahs 78-114).
 
 Prerequisites:
     1. Clone the Quranic Phonemizer:
        git clone https://github.com/Hetchy/Quranic-Phonemizer.git phonemizer
-    
+
     2. Install dependencies:
        pip install -r phonemizer/requirements.txt
 
 Usage:
     python generate_phoneme_data.py
-    
+
 Output:
     Creates app/data/juz_amma_phonemes.json
 """
@@ -27,7 +27,7 @@ PHONEMIZER_PATH = Path(__file__).parent.parent / "phonemizer"
 sys.path.insert(0, str(PHONEMIZER_PATH))
 
 try:
-    from core.phonemizer import Phonemizer
+    from quranic_phonemizer.phonemizer import Phonemizer
 except ImportError:
     print("ERROR: Quranic-Phonemizer not found!")
     print("Please clone it first:")
@@ -38,6 +38,19 @@ except ImportError:
 
 # Surah names mapping
 SURAH_NAMES = {
+    # Juz' 29
+    67: ("الملك", "Al-Mulk"),
+    68: ("القلم", "Al-Qalam"),
+    69: ("الحاقة", "Al-Haqqah"),
+    70: ("المعارج", "Al-Maarij"),
+    71: ("نوح", "Nuh"),
+    72: ("الجن", "Al-Jinn"),
+    73: ("المزمل", "Al-Muzzammil"),
+    74: ("المدثر", "Al-Muddaththir"),
+    75: ("القيامة", "Al-Qiyamah"),
+    76: ("الإنسان", "Al-Insan"),
+    77: ("المرسلات", "Al-Mursalat"),
+    # Juz' 30 / Juz' Amma
     78: ("النبأ", "An-Naba"),
     79: ("النازعات", "An-Naziat"),
     80: ("عبس", "Abasa"),
@@ -81,39 +94,57 @@ SURAH_NAMES = {
 def main():
     print("Initializing Quranic Phonemizer...")
     pm = Phonemizer()
-    
+
     data = {}
     total_ayahs = 0
-    
-    for surah_num in range(78, 115):
+
+    for surah_num in range(67, 115):
         name_ar, name_en = SURAH_NAMES[surah_num]
         print(f"Processing Surah {surah_num}: {name_en} ({name_ar})...")
-        
-        try:
-            result = pm.phonemize(str(surah_num), stops=["verse"])
-            
-            for verse_idx, verse in enumerate(result.verses, 1):
-                key = f"{surah_num}:{verse_idx}"
-                
-                # Get phonemes as a list
-                phoneme_str = verse.phonemes_str(phoneme_sep=" ", word_sep=" | ")
-                phoneme_list = [p for p in phoneme_str.replace("|", "").split() if p.strip()]
-                
-                data[key] = {
-                    "surah_number": surah_num,
-                    "surah_name_ar": name_ar,
-                    "surah_name_en": name_en,
-                    "ayah_number": verse_idx,
-                    "text_ar": verse.text,
-                    "phonemes": phoneme_str,
-                    "phoneme_list": phoneme_list,
-                    "total_phonemes": len(phoneme_list),
-                }
-                total_ayahs += 1
-                
-        except Exception as e:
-            print(f"  ERROR: {e}")
-            continue
+
+        for ayah_num in range(1, 300):
+            key = f"{surah_num}:{ayah_num}"
+            try:
+                result = pm.phonemize(key)
+            except ValueError:
+                # Raised when ayah is out of range — surah is done
+                break
+            except Exception as e:
+                print(f"  ERROR {key}: {e}")
+                break
+
+            phoneme_str = result.phonemes_str(phoneme_sep=" ", word_sep=" ")
+            phoneme_list = phoneme_str.split()
+
+            # Build letter->phoneme map from the new API
+            letter_phoneme_map = []
+            cursor = 0
+            try:
+                for chars, phonemes in result.letter_phoneme_mappings().to_list():
+                    letter_phoneme_map.append({
+                        "chars": chars,
+                        "phonemes": phonemes,
+                        "start": cursor,
+                        "end": cursor + len(phonemes),
+                    })
+                    cursor += len(phonemes)
+            except Exception:
+                letter_phoneme_map = []
+
+            data[key] = {
+                "surah_number": surah_num,
+                "surah_name_ar": name_ar,
+                "surah_name_en": name_en,
+                "ayah_number": ayah_num,
+                "text_ar": result._text,
+                "phonemes": phoneme_str,
+                "phoneme_list": phoneme_list,
+                "total_phonemes": len(phoneme_list),
+                "letter_phoneme_map": letter_phoneme_map,
+            }
+            total_ayahs += 1
+
+        print(f"  → {ayah_num - 1} ayahs")
     
     # Save to JSON file
     output_path = Path(__file__).parent.parent / "app" / "data" / "juz_amma_phonemes.json"

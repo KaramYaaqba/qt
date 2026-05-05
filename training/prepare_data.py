@@ -34,11 +34,41 @@ except ImportError:
 
 TARGET_SR = 16000
 
-# Last 20 surahs
-TARGET_SURAHS = set(range(95, 115))
+# Last 2 Juz's: Juz' 29 (67-77) + Juz' 30 / Juz' Amma (78-114)
+TARGET_SURAHS = set(range(67, 115))
 
 # RetaSy English surah name -> surah number
 SURAH_NAME_TO_NUMBER = {
+    # Juz' 29 (67-77)
+    "Al-Mulk":      67,
+    "Al-Qalam":     68,
+    "Al-Haqqah":    69,
+    "Al-Maarij":    70,
+    "Nuh":          71,
+    "Al-Jinn":      72,
+    "Al-Muzzammil": 73,
+    "Al-Muddaththir": 74,
+    "Al-Qiyamah":   75,
+    "Al-Insan":     76,
+    "Al-Mursalat":  77,
+    # Juz' 30 / Juz' Amma (78-114)
+    "An-Naba":      78,
+    "An-Naziat":    79,
+    "Abasa":        80,
+    "At-Takwir":    81,
+    "Al-Infitar":   82,
+    "Al-Mutaffifin": 83,
+    "Al-Inshiqaq":  84,
+    "Al-Burooj":    85,
+    "At-Tariq":     86,
+    "Al-Ala":       87,
+    "Al-Ghashiyah": 88,
+    "Al-Fajr":      89,
+    "Al-Balad":     90,
+    "Ash-Shams":    91,
+    "Al-Layl":      92,
+    "Ad-Duha":      93,
+    "Ash-Sharh":    94,
     "Al-Tin":       95,
     "Al-Alaq":      96,
     "Al-Qadr":      97,
@@ -222,7 +252,7 @@ def prepare_data(output_dir: str = "./data"):
     print("Initializing Quranic Phonemizer...")
     phonemizer = Phonemizer()
 
-    print(f"Building ayah lookup for surahs 95-114...")
+    print(f"Building ayah lookup for surahs {min(TARGET_SURAHS)}-{max(TARGET_SURAHS)}...")
     ayah_lookup = build_ayah_lookup(phonemizer)
     print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
 

@@ -1,0 +1,131 @@
+[NeMo W 2026-05-05 21:43:51 megatron_init:62] Megatron num_microbatches_calculator not found, using Apex version.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 modelPT:188] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config : 
+    manifest_filepath: ???
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: true
+    num_workers: 8
+    pin_memory: true
+    max_duration: 20
+    min_duration: 0.5
+    is_tarred: true
+    tarred_audio_filepaths: ???
+    shuffle_n: 2048
+    bucketing_strategy: fully_randomized
+    bucketing_batch_size: null
+    
+[NeMo W 2026-05-05 21:44:22 modelPT:195] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s). 
+    Validation config : 
+    manifest_filepath: ???
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: false
+    use_start_end_token: false
+    num_workers: 8
+    pin_memory: true
+    
+[NeMo W 2026-05-05 21:44:22 modelPT:202] Please call the ModelPT.setup_test_data() or ModelPT.setup_multiple_test_data() method and provide a valid configuration file to setup the test data loader(s).
+    Test config : 
+    manifest_filepath: ???
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: false
+    use_start_end_token: false
+    num_workers: 8
+    pin_memory: true
+    
+[NeMo W 2026-05-05 21:44:22 label_looping_base:125] No conditional node support for Cuda.
+    Cuda graphs with while loops are disabled, decoding speed will be slower
+    Reason: CUDA is not available
+[NeMo W 2026-05-05 21:44:22 label_looping_base:125] No conditional node support for Cuda.
+    Cuda graphs with while loops are disabled, decoding speed will be slower
+    Reason: CUDA is not available
+[NeMo W 2026-05-05 21:44:22 nemo_logging:364] /opt/homebrew/anaconda3/lib/python3.12/site-packages/lightning/pytorch/trainer/setup.py:177: GPU available but not used. You can set it by doing `Trainer(accelerator='gpu')`.
+    
+[NeMo W 2026-05-05 21:44:22 exp_manager:1177] No version folders would be created under the log folder as 'resume_if_exists' is enabled.
+[NeMo W 2026-05-05 21:44:22 exp_manager:1022] There were no checkpoints found in checkpoint_dir or no checkpoint folder at checkpoint_dir :output_test/fastconformer_quran_6surahs/checkpoints. Training from scratch.
+[NeMo W 2026-05-05 21:44:31 nemo_logging:364] /opt/homebrew/anaconda3/lib/python3.12/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:424: The 'val_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=7` in the `DataLoader` to improve performance.
+    
+[NeMo W 2026-05-05 21:45:04 nemo_logging:364] /opt/homebrew/anaconda3/lib/python3.12/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:424: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=7` in the `DataLoader` to improve performance.
+    

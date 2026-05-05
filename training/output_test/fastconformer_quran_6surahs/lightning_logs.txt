@@ -1,0 +1,16 @@
+
+  | Name              | Type                              | Params | Mode 
+--------------------------------------------------------------------------------
+0 | preprocessor      | AudioToMelSpectrogramPreprocessor | 0      | train
+1 | encoder           | ConformerEncoder                  | 108 M  | train
+2 | decoder           | ConvASRDecoder                    | 35.4 K | train
+3 | loss              | CTCLoss                           | 0      | train
+4 | spec_augmentation | SpectrogramAugmentation           | 0      | train
+5 | wer               | WER                               | 0      | train
+--------------------------------------------------------------------------------
+108 M     Trainable params
+0         Non-trainable params
+108 M     Total params
+435.190   Total estimated model params size (MB)
+499       Modules in train mode
+0         Modules in eval mode

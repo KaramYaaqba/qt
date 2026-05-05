@@ -27,19 +27,91 @@ from nemo.utils.exp_manager import exp_manager
 
 
 PRETRAINED_MODEL = "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
-ENCODER_FREEZE_EPOCHS = 10  # train decoder only for first N epochs
+ENCODER_FREEZE_EPOCHS   = 10  # Stage 1 end: decoder only
+ENCODER_PARTIAL_EPOCHS  = 20  # Stage 2 end: top 50% encoder layers + decoder
+# Stage 3: epoch 20+ = full encoder + decoder (lower LRs)
+
+# Per-group learning rates
+LR_STAGE1_DECODER  = 5e-4   # decoder only (encoder frozen)
+LR_STAGE2_DECODER  = 1e-4   # partial encoder unfreeze
+LR_STAGE2_ENCODER  = 1e-5
+LR_STAGE3_DECODER  = 5e-5   # full unfreeze
+LR_STAGE3_ENCODER  = 5e-6
 
 
-class EncoderUnfreezeCallback(Callback):
-    """Freeze encoder at start, unfreeze after ENCODER_FREEZE_EPOCHS."""
+def _set_optimizer_lrs(trainer, encoder_lr, decoder_lr):
+    """Set per-group learning rates in the optimizer."""
+    optimizer = trainer.optimizers[0]
+    for group in optimizer.param_groups:
+        role = group.get("name", "")
+        if role == "encoder":
+            group["lr"] = encoder_lr
+        else:
+            group["lr"] = decoder_lr
+    logging.info(f"  LR → encoder={encoder_lr}, decoder={decoder_lr}")
+
+
+class ThreeStageTrainingCallback(Callback):
+    """
+    3-stage progressive unfreezing:
+      Stage 1 (epochs 0–9):   encoder fully frozen, decoder only
+      Stage 2 (epochs 10–19): top 50% encoder layers unfrozen, lower LRs
+      Stage 3 (epochs 20+):   full encoder unfrozen, even lower LRs
+    """
+
+    def on_train_start(self, trainer, pl_module):
+        """Tag optimizer param groups as 'encoder' or 'decoder' for LR targeting."""
+        optimizer = trainer.optimizers[0]
+        encoder_params = {id(p) for p in pl_module.encoder.parameters()}
+        for group in optimizer.param_groups:
+            is_encoder = all(id(p) in encoder_params for p in group["params"])
+            group["name"] = "encoder" if is_encoder else "decoder"
+        logging.info("Optimizer param groups tagged: encoder / decoder")
 
     def on_train_epoch_start(self, trainer, pl_module):
-        if trainer.current_epoch == 0:
+        epoch = trainer.current_epoch
+
+        if epoch == 0:
             pl_module.encoder.freeze()
-            logging.info("Encoder frozen — training decoder only for first epochs")
-        elif trainer.current_epoch == ENCODER_FREEZE_EPOCHS:
+            logging.info("Stage 1: encoder frozen — training decoder only")
+
+        elif epoch == ENCODER_FREEZE_EPOCHS:
+            # Unfreeze top 50% of encoder layers (layers 9–16 of 17)
+            layers = list(pl_module.encoder.layers)
+            split = len(layers) // 2
+            for layer in layers[split:]:
+                for p in layer.parameters():
+                    p.requires_grad = True
+            # Also unfreeze the final norm if present
+            if hasattr(pl_module.encoder, "norm"):
+                for p in pl_module.encoder.norm.parameters():
+                    p.requires_grad = True
+            _set_optimizer_lrs(trainer, LR_STAGE2_ENCODER, LR_STAGE2_DECODER)
+            logging.info(
+                f"Stage 2: unfroze top {len(layers) - split}/{len(layers)} encoder layers "
+                f"(indices {split}–{len(layers)-1})"
+            )
+
+        elif epoch == ENCODER_PARTIAL_EPOCHS:
             pl_module.encoder.unfreeze()
-            logging.info(f"Encoder unfrozen at epoch {trainer.current_epoch} — full fine-tuning")
+            _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
+            logging.info("Stage 3: full encoder unfrozen — fine-tuning everything")
+
+
+class ValidationMetricsCallback(Callback):
+    """Log validation PER (phoneme error rate) alongside val_loss each epoch."""
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        metrics = trainer.callback_metrics
+        val_loss = metrics.get("val_loss")
+        val_wer  = metrics.get("val_wer")  # NeMo logs this as WER; for phonemes it's PER
+        parts = []
+        if val_loss is not None:
+            parts.append(f"val_loss={float(val_loss):.4f}")
+        if val_wer is not None:
+            parts.append(f"val_PER={float(val_wer)*100:.2f}%")
+        if parts:
+            logging.info("Validation — " + "  ".join(parts))
 
 
 def load_vocab(vocab_path: str) -> list[str]:
@@ -151,7 +223,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
 
         "optim": {
             "name": "adamw",
-            "lr": 5e-4,  # higher LR to push decoder out of blank collapse faster
+            "lr": LR_STAGE1_DECODER,
             "betas": [0.9, 0.98],
             "weight_decay": 1e-3,
             "sched": {
@@ -200,7 +272,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
     return model
 
 
-def train(data_dir: str = "./data", output_dir: str = "./output"):
+def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: int = 100):
     data_path   = Path(data_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -227,7 +299,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
     trainer_cfg = OmegaConf.create({
         "devices":                 1,
         "accelerator":             "gpu" if use_gpu else "cpu",
-        "max_epochs":              50,
+        "max_epochs":              max_epochs,
         "accumulate_grad_batches": 4,
         "gradient_clip_val":       1.0,
         "precision":               "32-true",
@@ -255,7 +327,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
 
     trainer = Trainer(
         **OmegaConf.to_container(trainer_cfg, resolve=True),
-        callbacks=[EncoderUnfreezeCallback()],
+        callbacks=[ThreeStageTrainingCallback(), ValidationMetricsCallback()],
     )
     exp_manager(trainer, exp_manager_cfg)
 
@@ -270,7 +342,8 @@ def train(data_dir: str = "./data", output_dir: str = "./output"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir",   default="./data")
-    parser.add_argument("--output_dir", default="./output")
+    parser.add_argument("--data_dir",    default="./data")
+    parser.add_argument("--output_dir",  default="./output")
+    parser.add_argument("--max_epochs",  default=100, type=int)
     args = parser.parse_args()
-    train(args.data_dir, args.output_dir)
+    train(args.data_dir, args.output_dir, args.max_epochs)

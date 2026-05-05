@@ -1,0 +1,1 @@
+train_conformer_ctc.py --data_dir ./data --output_dir ./output_test --max_epochs 1

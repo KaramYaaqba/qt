@@ -1,0 +1,179 @@
+[NeMo W 2026-05-05 21:43:51 megatron_init:62] Megatron num_microbatches_calculator not found, using Apex version.
+[NeMo I 2026-05-05 21:43:52 train_conformer_ctc:289] Vocabulary size (non-blank): 68
+[NeMo I 2026-05-05 21:43:52 train_conformer_ctc:237] Initializing CTC model with Quranic phoneme vocab...
+[NeMo I 2026-05-05 21:43:52 collections:201] Dataset loaded with 10961 files totalling 16.49 hours
+[NeMo I 2026-05-05 21:43:52 collections:202] 40 files were filtered totalling 0.04 hours
+[NeMo I 2026-05-05 21:43:52 collections:201] Dataset loaded with 1385 files totalling 2.04 hours
+[NeMo I 2026-05-05 21:43:52 collections:202] 0 files were filtered totalling 0.00 hours
+[NeMo I 2026-05-05 21:43:52 train_conformer_ctc:241] Loading pretrained encoder from: nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:21 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo I 2026-05-05 21:44:21 mixins:184] Tokenizer SentencePieceTokenizer initialized with 1024 tokens
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': True, 'num_workers': 8, 'pin_memory': True, 'max_duration': 20, 'min_duration': 0.5, 'is_tarred': True, 'tarred_audio_filepaths': '???', 'shuffle_n': 2048, 'bucketing_strategy': 'fully_randomized', 'bucketing_batch_size': None}
+     Reason: Missing mandatory value: train_ds.manifest_filepath
+        full_key: train_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: validation_ds.manifest_filepath
+        full_key: validation_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'manifest_filepath': '???', 'sample_rate': 16000, 'batch_size': 16, 'shuffle': False, 'use_start_end_token': False, 'num_workers': 8, 'pin_memory': True}
+     Reason: Missing mandatory value: test_ds.manifest_filepath
+        full_key: test_ds.manifest_filepath
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 model_utils:515] Skipped conversion for config/subconfig:
+    {'dir': '???', 'type': 'bpe', 'model_path': 'nemo:43c84e71237048ddab3bb273bdc00fa0_tokenizer.model', 'vocab_path': 'nemo:1e7bbe36b91a472896c99283bda08bf3_vocab.txt', 'spe_tokenizer_vocab': 'nemo:e7a019581cd54cce88ac2acf8e4c54a3_tokenizer.vocab'}
+     Reason: Missing mandatory value: tokenizer.dir
+        full_key: tokenizer.dir
+        object_type=dict.
+[NeMo W 2026-05-05 21:44:22 modelPT:188] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config : 
+    manifest_filepath: ???
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: true
+    num_workers: 8
+    pin_memory: true
+    max_duration: 20
+    min_duration: 0.5
+    is_tarred: true
+    tarred_audio_filepaths: ???
+    shuffle_n: 2048
+    bucketing_strategy: fully_randomized
+    bucketing_batch_size: null
+    
+[NeMo W 2026-05-05 21:44:22 modelPT:195] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s). 
+    Validation config : 
+    manifest_filepath: ???
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: false
+    use_start_end_token: false
+    num_workers: 8
+    pin_memory: true
+    
+[NeMo W 2026-05-05 21:44:22 modelPT:202] Please call the ModelPT.setup_test_data() or ModelPT.setup_multiple_test_data() method and provide a valid configuration file to setup the test data loader(s).
+    Test config : 
+    manifest_filepath: ???
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: false
+    use_start_end_token: false
+    num_workers: 8
+    pin_memory: true
+    
+[NeMo I 2026-05-05 21:44:22 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.0, 'clamp': -1.0}
+[NeMo I 2026-05-05 21:44:22 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.0, 'clamp': -1.0}
+[NeMo W 2026-05-05 21:44:22 label_looping_base:125] No conditional node support for Cuda.
+    Cuda graphs with while loops are disabled, decoding speed will be slower
+    Reason: CUDA is not available
+[NeMo I 2026-05-05 21:44:22 rnnt_models:226] Using RNNT Loss : warprnnt_numba
+    Loss warprnnt_numba_kwargs: {'fastemit_lambda': 0.0, 'clamp': -1.0}
+[NeMo W 2026-05-05 21:44:22 label_looping_base:125] No conditional node support for Cuda.
+    Cuda graphs with while loops are disabled, decoding speed will be slower
+    Reason: CUDA is not available
+[NeMo I 2026-05-05 21:44:22 save_restore_connector:285] Model EncDecHybridRNNTCTCBPEModel was successfully restored from /Users/kyaaqba/.cache/huggingface/hub/models--nvidia--stt_ar_fastconformer_hybrid_large_pcd_v1.0/snapshots/7f32349d952f42a28dce979ba73270aa2bbdfa89/stt_ar_fastconformer_hybrid_large_pcd_v1.0.nemo.
+[NeMo I 2026-05-05 21:44:22 train_conformer_ctc:247] Transplanting pretrained encoder weights (compatible layers only)...
+[NeMo I 2026-05-05 21:44:22 train_conformer_ctc:258] Transferred 692 layers, skipped 0 (shape mismatch)
+[NeMo I 2026-05-05 21:44:22 train_conformer_ctc:265] Preprocessor weights transplanted successfully
+[NeMo W 2026-05-05 21:44:22 nemo_logging:364] /opt/homebrew/anaconda3/lib/python3.12/site-packages/lightning/pytorch/trainer/setup.py:177: GPU available but not used. You can set it by doing `Trainer(accelerator='gpu')`.
+    
+[NeMo I 2026-05-05 21:44:22 exp_manager:594] ExpManager schema
+[NeMo I 2026-05-05 21:44:22 exp_manager:595] {'explicit_log_dir': None, 'exp_dir': None, 'name': None, 'version': None, 'use_datetime_version': True, 'resume_if_exists': False, 'resume_past_end': False, 'resume_ignore_no_checkpoint': False, 'resume_from_checkpoint': None, 'create_tensorboard_logger': True, 'summary_writer_kwargs': None, 'create_wandb_logger': False, 'wandb_logger_kwargs': None, 'create_mlflow_logger': False, 'mlflow_logger_kwargs': {'experiment_name': None, 'run_name': None, 'tracking_uri': None, 'tags': None, 'save_dir': './mlruns', 'prefix': '', 'artifact_location': None, 'run_id': None, 'log_model': False}, 'create_dllogger_logger': False, 'dllogger_logger_kwargs': {'verbose': False, 'stdout': False, 'json_file': './dllogger.json'}, 'create_clearml_logger': False, 'clearml_logger_kwargs': {'project': None, 'task': None, 'connect_pytorch': False, 'model_name': None, 'tags': None, 'log_model': False, 'log_cfg': False, 'log_metrics': False}, 'create_neptune_logger': False, 'neptune_logger_kwargs': None, 'create_checkpoint_callback': True, 'checkpoint_callback_params': {'filepath': None, 'dirpath': None, 'filename': None, 'monitor': 'val_loss', 'verbose': True, 'save_last': True, 'save_top_k': 3, 'save_weights_only': False, 'mode': 'min', 'auto_insert_metric_name': True, 'every_n_epochs': 1, 'every_n_train_steps': None, 'train_time_interval': None, 'prefix': None, 'postfix': '.nemo', 'save_best_model': False, 'always_save_nemo': False, 'save_nemo_on_train_end': True, 'model_parallel_size': None, 'save_on_train_epoch_end': False, 'async_save': False, 'save_last_n_optim_states': -1}, 'create_early_stopping_callback': False, 'create_ipl_epoch_stopper_callback': False, 'early_stopping_callback_params': {'monitor': 'val_loss', 'mode': 'min', 'min_delta': 0.001, 'patience': 10, 'verbose': True, 'strict': True, 'check_finite': True, 'stopping_threshold': None, 'divergence_threshold': None, 'check_on_train_epoch_end': None, 'log_rank_zero_only': False}, 'ipl_epoch_stopper_callback_params': {'enable_stop': True, 'stop_every_n_epochs': 1}, 'create_preemption_callback': True, 'files_to_copy': None, 'log_step_timing': True, 'log_delta_step_timing': False, 'step_timing_kwargs': {'reduction': 'mean', 'sync_cuda': False, 'buffer_size': 1}, 'log_local_rank_0_only': False, 'log_global_rank_0_only': False, 'disable_validation_on_resume': True, 'ema': {'enable': False, 'decay': 0.999, 'cpu_offload': False, 'validate_original_weights': False, 'every_n_steps': 1}, 'max_time_per_run': None, 'seconds_to_sleep': 5.0, 'create_straggler_detection_callback': False, 'straggler_detection_params': {'report_time_interval': 300.0, 'calc_relative_gpu_perf': True, 'calc_individual_gpu_perf': True, 'num_gpu_perf_scores_to_log': 5, 'gpu_relative_perf_threshold': 0.7, 'gpu_individual_perf_threshold': 0.7, 'stop_if_detected': False}, 'create_fault_tolerance_callback': False, 'fault_tolerance': {'workload_check_interval': 5.0, 'initial_rank_heartbeat_timeout': 3600.0, 'rank_heartbeat_timeout': 2700.0, 'calculate_timeouts': True, 'safety_factor': 5.0, 'rank_termination_signal': <Signals.SIGKILL: 9>, 'log_level': 'INFO', 'max_rank_restarts': 0, 'max_subsequent_job_failures': 0, 'additional_ft_launcher_args': '', 'simulated_fault': None}, 'log_tflops_per_sec_per_gpu': True}
+[NeMo W 2026-05-05 21:44:22 exp_manager:1177] No version folders would be created under the log folder as 'resume_if_exists' is enabled.
+[NeMo W 2026-05-05 21:44:22 exp_manager:1022] There were no checkpoints found in checkpoint_dir or no checkpoint folder at checkpoint_dir :output_test/fastconformer_quran_6surahs/checkpoints. Training from scratch.
+[NeMo I 2026-05-05 21:44:22 exp_manager:655] Experiments will be logged at output_test/fastconformer_quran_6surahs
+[NeMo I 2026-05-05 21:44:22 exp_manager:1262] TensorboardLogger has been set up
+[NeMo I 2026-05-05 21:44:22 exp_manager:1435] Preemption is supported only on GPUs, disabling preemption
+[NeMo I 2026-05-05 21:44:22 exp_manager:804] TFLOPs per sec per GPU will be calculated, conditioned on supported models. Defaults to -1 upon failure.
+[NeMo I 2026-05-05 21:44:23 train_conformer_ctc:334] Starting fine-tuning...
+[NeMo I 2026-05-05 21:44:31 modelPT:830] Optimizer config = AdamW (
+    Parameter Group 0
+        amsgrad: False
+        betas: [0.9, 0.98]
+        capturable: False
+        decoupled_weight_decay: True
+        differentiable: False
+        eps: 1e-08
+        foreach: None
+        fused: None
+        lr: 0.0005
+        maximize: False
+        weight_decay: 0.001
+    )
+[NeMo I 2026-05-05 21:44:31 lr_scheduler:995] Scheduler "<nemo.core.optim.lr_scheduler.CosineAnnealing object at 0x3ad501760>" 
+    will be used during training (effective maximum steps = 172) - 
+    Parameters : 
+    (warmup_steps: 500
+    min_lr: 1.0e-06
+    max_steps: 172
+    )
+[NeMo W 2026-05-05 21:44:31 nemo_logging:364] /opt/homebrew/anaconda3/lib/python3.12/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:424: The 'val_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=7` in the `DataLoader` to improve performance.
+    
+[NeMo W 2026-05-05 21:45:04 nemo_logging:364] /opt/homebrew/anaconda3/lib/python3.12/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:424: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=7` in the `DataLoader` to improve performance.
+    
+[NeMo I 2026-05-05 21:45:04 train_conformer_ctc:69] Optimizer param groups tagged: encoder / decoder
+[NeMo I 2026-05-05 21:45:04 train_conformer_ctc:76] Stage 1: encoder frozen — training decoder only
