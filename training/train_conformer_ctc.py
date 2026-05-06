@@ -13,6 +13,7 @@ import argparse
 from pathlib import Path
 
 import torch
+torch.set_float32_matmul_precision('high')
 from omegaconf import OmegaConf
 
 # NeMo 2.x uses lightning (not pytorch_lightning) internally
@@ -204,7 +205,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "sample_rate": 16000,
             "batch_size": 16,
             "shuffle": True,
-            "num_workers": 0,
+            "num_workers": 8,
             "pin_memory": True,
             "trim_silence": False,
             "max_duration": 30.0,
@@ -216,7 +217,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "sample_rate": 16000,
             "batch_size": 16,
             "shuffle": False,
-            "num_workers": 0,
+            "num_workers": 8,
             "pin_memory": True,
             "trim_silence": False,
         },

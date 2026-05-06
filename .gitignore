@@ -15,3 +15,4 @@ backend/model/model.int8.onnx
 
 # Package lock
 frontend/package-lock.json
+.DS_Store

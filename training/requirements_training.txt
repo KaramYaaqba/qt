@@ -1,0 +1,20 @@
+# PyTorch stack — pinned for CUDA 12.4+ compatibility (RunPod, CUDA driver 12.7)
+# Install PyTorch first (separate command needed for --index-url):
+#   pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+# Then install the rest:
+#   pip install -r requirements_training.txt
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
+
+# NeMo ASR
+nemo_toolkit[asr]
+
+# NumPy must stay <2.0 — scipy/torchmetrics not yet NumPy 2.x compatible
+numpy<2.0
+
+# Audio & data
+librosa>=0.11
+soundfile
+datasets
+setuptools
