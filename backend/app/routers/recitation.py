@@ -37,7 +37,7 @@ def get_alignment_service():
 @router.post("/check", response_model=RecitationCheckResponse)
 async def check_recitation(
     audio: UploadFile = File(..., description="Audio file (WebM, WAV, MP3, etc.)"),
-    surah: int = Form(..., ge=78, le=114, description="Surah number (78-114)"),
+    surah: int = Form(..., ge=67, le=114, description="Surah number (67-114)"),
     ayah: int = Form(..., ge=1, description="Ayah number"),
     speech_service=Depends(get_speech_service),
     reference_service=Depends(get_reference_service),

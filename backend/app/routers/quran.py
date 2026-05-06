@@ -40,10 +40,10 @@ async def get_surah(
     **Parameters:**
     - `surah_number`: Surah number (78-114)
     """
-    if not 78 <= surah_number <= 114:
+    if not 67 <= surah_number <= 114:
         raise HTTPException(
             status_code=400,
-            detail="Surah number must be between 78 and 114 (Juz' Amma)"
+            detail="Surah number must be between 67 and 114 (Juz' 29-30)"
         )
     
     surah_info = reference_service.get_surah_info(surah_number)
@@ -69,10 +69,10 @@ async def get_ayah(
     - `surah_number`: Surah number (78-114)
     - `ayah_number`: Ayah number within the surah
     """
-    if not 78 <= surah_number <= 114:
+    if not 67 <= surah_number <= 114:
         raise HTTPException(
             status_code=400,
-            detail="Surah number must be between 78 and 114 (Juz' Amma)"
+            detail="Surah number must be between 67 and 114 (Juz' 29-30)"
         )
     
     if not reference_service.ayah_exists(surah_number, ayah_number):
@@ -105,10 +105,10 @@ async def get_surah_ayahs(
     **Parameters:**
     - `surah_number`: Surah number (78-114)
     """
-    if not 78 <= surah_number <= 114:
+    if not 67 <= surah_number <= 114:
         raise HTTPException(
             status_code=400,
-            detail="Surah number must be between 78 and 114 (Juz' Amma)"
+            detail="Surah number must be between 67 and 114 (Juz' 29-30)"
         )
     
     surah_info = reference_service.get_surah_info(surah_number)
