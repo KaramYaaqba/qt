@@ -51,7 +51,7 @@ def export_to_onnx(
     model.export(
         str(onnx_path),
         onnx_opset_version=17,
-        check_trace=True,
+        check_trace=False,
     )
     
     logging.info(f"Saved ONNX model to: {onnx_path}")

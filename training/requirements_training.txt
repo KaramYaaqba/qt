@@ -18,3 +18,7 @@ librosa>=0.11
 soundfile
 datasets
 setuptools
+
+# Export
+onnxruntime
+onnx
