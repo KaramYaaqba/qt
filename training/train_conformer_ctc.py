@@ -278,7 +278,6 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
                     "prob": 0.3,
                     "min_snr_db": 10,
                     "max_snr_db": 50,
-                    "noise_type": "white",
                 },
                 "gain": {
                     "prob": 0.5,
