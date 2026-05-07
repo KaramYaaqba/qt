@@ -10,7 +10,10 @@ Usage:
     python train_conformer_ctc.py [--data_dir ./data] [--output_dir ./output]
 """
 import argparse
+import os
 from pathlib import Path
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import torch
 torch.set_float32_matmul_precision('high')
@@ -302,7 +305,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
         "train_ds": {
             "manifest_filepath": train_manifest,
             "sample_rate": 16000,
-            "batch_size": 20,  # increased from 16
+            "batch_size": 8,  # reduced for Stage 3 full-encoder memory budget
             "shuffle": True,
             "num_workers": 8,
             "pin_memory": True,
@@ -324,7 +327,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
         "validation_ds": {
             "manifest_filepath": val_manifest,
             "sample_rate": 16000,
-            "batch_size": 16,
+            "batch_size": 8,
             "shuffle": False,
             "num_workers": 8,
             "pin_memory": True,
@@ -411,7 +414,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
         "devices":                 1,
         "accelerator":             "gpu" if use_gpu else "cpu",
         "max_epochs":              max_epochs,
-        "accumulate_grad_batches": 2,
+        "accumulate_grad_batches": 5,  # batch 8 × 5 = effective 40, same as before
         "gradient_clip_val":       1.0,
         "precision":               "bf16-mixed",  # 2x faster on 4090, stable training
         "log_every_n_steps":       5,
