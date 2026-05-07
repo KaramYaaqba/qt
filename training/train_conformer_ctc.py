@@ -83,9 +83,9 @@ def _add_params_to_enc_group(optimizer, params):
 class ThreeStageTrainingCallback(Callback):
     """
     3-stage progressive unfreezing:
-      Stage 1 (epochs 0–9):   encoder fully frozen, decoder only
-      Stage 2 (epochs 10–19): top 50% encoder layers unfrozen, lower LRs
-      Stage 3 (epochs 20+):   full encoder unfrozen, even lower LRs
+      Stage 1 (epochs 0–4):   encoder fully frozen, decoder only
+      Stage 2 (epochs 5–9):   top 50% encoder layers unfrozen, lower LRs
+      Stage 3 (epochs 10+):   full encoder unfrozen, warmup then full LRs
     """
 
     def on_train_start(self, trainer, pl_module):
@@ -149,7 +149,8 @@ class ThreeStageTrainingCallback(Callback):
         # from LR_STAGE3 down to min_lr over the remaining epochs
         scheduler = trainer.lr_scheduler_configs[0].scheduler
         if hasattr(scheduler, 'last_epoch'):
-            scheduler.last_epoch = 0
+            scheduler.last_epoch = -1
+            scheduler.step()
             logging.info("Stage 3: LR scheduler reset for fresh cosine decay")
 
         logging.info(
@@ -200,7 +201,14 @@ class ValidationMetricsCallback(Callback):
 
 
 def load_vocab(vocab_path: str) -> list[str]:
-    """Load non-blank tokens from tokens.txt."""
+    """Load non-blank tokens from tokens.txt.
+
+    Token inventory notes:
+      Q   — silence / non-speech marker emitted by the Quranic Phonemizer for
+            pauses (e.g. waqf positions). Distinct from CTC <blank>.
+      j̃ m̃ w̃ ñ — nasalized variants used by the phonemizer for specific
+            assimilation rules (idgham bighunna).
+    """
     vocab = []
     with open(vocab_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -331,7 +339,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "sched": {
                 "name": "CosineAnnealing",
                 "warmup_steps": 500,
-                "max_steps": 80000,  # large enough so LR stays useful through all 3 stages
+                "max_steps": 28000,  # ~275 steps/epoch × 100 epochs (11k samples, batch 40 effective)
                 "min_lr": 5e-7,
             },
         },

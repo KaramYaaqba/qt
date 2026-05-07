@@ -108,10 +108,17 @@ def normalize(text: str) -> str:
     return ' '.join(text.split())
 
 
-def assign_split(surah: int, ayah: int) -> str:
-    # Split by (surah, ayah) so all recordings of the same ayah go to one split.
-    # This ensures dev/test evaluate on content never seen during training.
-    r = (surah * 1000 + ayah) % 10
+def assign_split(surah: int) -> str:
+    # Split by surah so entire surahs are held out — the model never sees any
+    # recording of a dev/test surah during training. Splitting by ayah looks
+    # correct but isn't: the same ayahs appear in all splits, so val_wer only
+    # measures reciter generalisation, not content generalisation.
+    #
+    # Surah-level split (surah % 10):
+    #   8  → test  (surahs 78, 88, 98, 108)
+    #   9  → dev   (surahs 79, 89, 99, 109)
+    #   else → train
+    r = surah % 10
     if r == 8:
         return "test"
     if r == 9:
@@ -120,8 +127,14 @@ def assign_split(surah: int, ayah: int) -> str:
 
 
 def build_ayah_lookup(phonemizer) -> dict:
-    """Build normalize(ayah_text) -> (surah, ayah) for target surahs."""
+    """Build normalize(ayah_text) -> (surah, ayah) for target surahs.
+
+    Collisions (two ayahs with identical normalized text) are logged and
+    both entries are dropped — a match on ambiguous text could silently
+    assign the wrong surah/ayah to a sample.
+    """
     lookup = {}
+    collisions: set[str] = set()
     for surah in sorted(TARGET_SURAHS):
         for ayah in range(1, 300):
             try:
@@ -129,9 +142,20 @@ def build_ayah_lookup(phonemizer) -> dict:
                 text = result._text
                 if not text:
                     break
-                lookup[normalize(text)] = (surah, ayah)
             except Exception:
                 break
+            key = normalize(text)
+            if key in collisions:
+                continue
+            if key in lookup:
+                existing = lookup.pop(key)
+                collisions.add(key)
+                print(
+                    f"Warning: normalized text collision — "
+                    f"{existing[0]}:{existing[1]} vs {surah}:{ayah}; both dropped from lookup"
+                )
+                continue
+            lookup[key] = (surah, ayah)
     return lookup
 
 
@@ -169,17 +193,35 @@ def decode_audio(audio: dict, idx: int):
         return None, None
 
 
-def make_entry(audio_raw, sample_rate, surah, ayah, phonemes, idx, audio_dir):
+_SUBSAMPLING_FACTOR = 4   # must match encoder.subsampling_factor in train_conformer_ctc.py
+_FRAME_STRIDE_S     = 0.01  # 10ms mel frame stride
+
+MAX_DURATION = 30.0  # seconds — enforced on actual decoded audio
+
+def make_entry(audio_raw, sample_rate, surah, ayah, phonemes, idx, audio_dir, dataset_tag=""):
     try:
         audio_array = resample_audio(audio_raw, sample_rate)
     except RuntimeError as e:
         print(f"Error: {e}")
         return None
-    audio_path = audio_dir / f"s{surah:03d}_a{ayah:03d}_{idx:06d}.wav"
+
+    duration = len(audio_array) / TARGET_SR
+    if duration > MAX_DURATION:
+        return None
+
+    n_tokens  = len(phonemes.split())
+    n_frames  = int(duration / (_FRAME_STRIDE_S * _SUBSAMPLING_FACTOR))
+    if n_frames < n_tokens:
+        # CTC requires at least one encoder frame per output token; samples that
+        # violate this produce no valid alignment and corrupt the gradient.
+        return None
+
+    tag = f"{dataset_tag}_" if dataset_tag else ""
+    audio_path = audio_dir / f"{tag}s{surah:03d}_a{ayah:03d}_{idx:06d}.wav"
     sf.write(audio_path, audio_array, TARGET_SR)
     return {
         "audio_filepath": str(audio_path.absolute()),
-        "duration":       round(len(audio_array) / TARGET_SR, 3),
+        "duration":       round(duration, 3),
         "text":           phonemes,
         "surah":          surah,
         "ayah":           ayah,
@@ -202,8 +244,8 @@ def process_retasy(sample, idx, audio_dir, phonemizer, ayah_lookup):
     phonemes = get_phonemes(phonemizer, surah, ayah)
     if not phonemes:
         return None, "no_phonemes"
-    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
-    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir, "retasy")
+    return (entry, assign_split(surah)) if entry else (None, "too_long_or_ctc")
 
 
 def process_everyayah(sample, idx, audio_dir, phonemizer, ayah_lookup):
@@ -217,8 +259,8 @@ def process_everyayah(sample, idx, audio_dir, phonemizer, ayah_lookup):
     phonemes = get_phonemes(phonemizer, surah, ayah)
     if not phonemes:
         return None, "no_phonemes"
-    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
-    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir, "everyayah")
+    return (entry, assign_split(surah)) if entry else (None, "too_long_or_ctc")
 
 
 def process_ea_ud(sample, idx, audio_dir, phonemizer, ayah_lookup):
@@ -229,8 +271,9 @@ def process_ea_ud(sample, idx, audio_dir, phonemizer, ayah_lookup):
     cover multiple ayahs and cannot be reliably matched to a single ayah.
     """
     # EA-UD fields: audio, duration, transcription
-    duration = sample.get("duration", 0)
-    if duration > 30.0:
+    # Metadata duration used as a cheap pre-filter only; actual duration is
+    # verified against MAX_DURATION in make_entry after decoding.
+    if sample.get("duration", 0) > 35.0:
         return None, "too_long"
     match = ayah_lookup.get(normalize(sample.get("transcription", "")))
     if match is None:
@@ -242,8 +285,8 @@ def process_ea_ud(sample, idx, audio_dir, phonemizer, ayah_lookup):
     phonemes = get_phonemes(phonemizer, surah, ayah)
     if not phonemes:
         return None, "no_phonemes"
-    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
-    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir, "eaud")
+    return (entry, assign_split(surah)) if entry else (None, "too_long_or_ctc")
 
 
 def process_tarteel(sample, idx, audio_dir, phonemizer):
@@ -261,8 +304,32 @@ def process_tarteel(sample, idx, audio_dir, phonemizer):
     phonemes = get_phonemes(phonemizer, surah, ayah)
     if not phonemes:
         return None, "no_phonemes"
-    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
-    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir, "tarteel")
+    return (entry, assign_split(surah)) if entry else (None, "too_long_or_ctc")
+
+
+def _stream_dataset(name, hf_path, processor, add_entry, log_interval=500):
+    """Stream one HuggingFace dataset, process each sample, and add to manifests.
+
+    Returns (n_processed, n_skipped).
+    """
+    n_processed = n_skipped = 0
+    try:
+        ds = load_dataset(hf_path, split="train", streaming=True)
+        ds = ds.cast_column("audio", datasets_Audio(decode=False))
+        print(f"\nLoading {name} dataset...")
+        for idx, sample in enumerate(ds):
+            entry, split = processor(sample, idx)
+            if entry is None or not add_entry(entry, split):
+                n_skipped += 1
+                continue
+            n_processed += 1
+            if n_processed % log_interval == 0:
+                print(f"  {name}: {n_processed} processed (scanned {idx + 1} total)...")
+    except Exception as e:
+        print(f"{name} load failed: {e}")
+    print(f"{name} done: {n_processed} samples")
+    return n_processed, n_skipped
 
 
 def save_manifests(manifests: dict, output_path: Path):
@@ -302,74 +369,34 @@ def prepare_data(output_dir: str = "./data"):
     print(f"Lookup ready: {len(ayah_lookup)} unique ayahs")
 
     manifests = {"train": [], "dev": [], "test": []}
-    processed = skipped = 0
+    ayah_counts: dict[tuple[int, int], int] = {}
+    MAX_PER_AYAH = 40  # prevents Surah 112/113/114 from dominating training
 
-    # --- Dataset 1: RetaSy (non-native speakers) ---
-    print("\nLoading RetaSy dataset (non-native speakers)...")
-    try:
-        ds_retasy = load_dataset("RetaSy/quranic_audio_dataset", split="train", streaming=True)
-        ds_retasy = ds_retasy.cast_column("audio", datasets_Audio(decode=False))
-        for idx, sample in enumerate(ds_retasy):
-            entry, result = process_retasy(sample, idx, audio_dir, phonemizer, ayah_lookup)
-            if entry is None:
-                skipped += 1
-                continue
-            manifests[result].append(entry)
-            processed += 1
-            if processed % 100 == 0:
-                print(f"  RetaSy: {processed} processed (scanned {idx+1} total)...")
-    except Exception as e:
-        print(f"RetaSy load failed: {e}")
+    def add_entry(entry: dict, split: str) -> bool:
+        if split == "train":
+            key = (entry["surah"], entry["ayah"])
+            if ayah_counts.get(key, 0) >= MAX_PER_AYAH:
+                return False
+            ayah_counts[key] = ayah_counts.get(key, 0) + 1
+        manifests[split].append(entry)
+        return True
 
-    retasy_count = processed
-    print(f"RetaSy done: {retasy_count} samples")
+    datasets = [
+        ("RetaSy",    "RetaSy/quranic_audio_dataset",
+         lambda s, i: process_retasy(s, i, audio_dir, phonemizer, ayah_lookup), 100),
+        ("everyayah", "tarteel-ai/everyayah",
+         lambda s, i: process_everyayah(s, i, audio_dir, phonemizer, ayah_lookup), 500),
+        ("EA-UD",     "tarteel-ai/EA-UD",
+         lambda s, i: process_ea_ud(s, i, audio_dir, phonemizer, ayah_lookup), 500),
+    ]
 
-    # --- Dataset 2: everyayah (professional reciters, supplementary) ---
-    print("\nLoading everyayah dataset (professional reciters)...")
-    try:
-        ds_every = load_dataset("tarteel-ai/everyayah", split="train", streaming=True)
-        ds_every = ds_every.cast_column("audio", datasets_Audio(decode=False))
-        every_processed = 0
-        for idx, sample in enumerate(ds_every):
-            # Use offset idx to avoid filename collisions with RetaSy
-            entry, result = process_everyayah(sample, idx + 500000, audio_dir, phonemizer, ayah_lookup)
-            if entry is None:
-                skipped += 1
-                continue
-            manifests[result].append(entry)
-            processed += 1
-            every_processed += 1
-            if every_processed % 500 == 0:
-                print(f"  everyayah: {every_processed} processed (scanned {idx+1} total)...")
-    except Exception as e:
-        print(f"everyayah load failed: {e}")
+    total_processed = total_skipped = 0
+    for name, hf_path, processor, log_interval in datasets:
+        n, s = _stream_dataset(name, hf_path, processor, add_entry, log_interval)
+        total_processed += n
+        total_skipped += s
 
-    everyayah_count = processed - retasy_count
-    print(f"everyayah done: {everyayah_count} samples")
-
-    # --- Dataset 3: EA-UD (diverse reciters, diacritised text, text-matched) ---
-    print("\nLoading EA-UD dataset (diverse reciters)...")
-    try:
-        ds_ea_ud = load_dataset("tarteel-ai/EA-UD", split="train", streaming=True)
-        ds_ea_ud = ds_ea_ud.cast_column("audio", datasets_Audio(decode=False))
-        ea_ud_processed = 0
-        for idx, sample in enumerate(ds_ea_ud):
-            # Offset avoids filename collisions: RetaSy 0-499999, everyayah 500000-999999
-            entry, result = process_ea_ud(sample, idx + 1000000, audio_dir, phonemizer, ayah_lookup)
-            if entry is None:
-                skipped += 1
-                continue
-            manifests[result].append(entry)
-            processed += 1
-            ea_ud_processed += 1
-            if ea_ud_processed % 500 == 0:
-                print(f"  EA-UD: {ea_ud_processed} processed (scanned {idx+1} total)...")
-    except Exception as e:
-        print(f"EA-UD load failed: {e}")
-
-    ea_ud_count = processed - retasy_count - everyayah_count
-    print(f"EA-UD done: {ea_ud_count} samples")
-    print(f"\nTotal: {processed} processed, {skipped} skipped")
+    print(f"\nTotal: {total_processed} processed, {total_skipped} skipped")
 
     save_manifests(manifests, output_path)
 

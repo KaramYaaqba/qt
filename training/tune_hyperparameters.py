@@ -19,7 +19,7 @@ except ImportError:
     from pytorch_lightning import Trainer, Callback
     from pytorch_lightning.callbacks import LearningRateMonitor
 
-from nemo.collections.asr.models import EncDecCTCModel
+from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 from omegaconf import OmegaConf
@@ -167,7 +167,7 @@ def build_ctc_model_tuned(vocab, train_manifest, val_manifest, params):
             "n_layers": 17,
             "d_model": 512,
             "subsampling": "dw_striding",
-            "subsampling_factor": 8,
+            "subsampling_factor": 4,
             "subsampling_conv_channels": 256,
             "ff_expansion_factor": 4,
             "self_attention_model": "rel_pos_local_attn",
@@ -207,19 +207,8 @@ def build_ctc_model_tuned(vocab, train_manifest, val_manifest, params):
             "max_duration": 25.0,
             "min_duration": 0.5,
             "augmentor": {
-                "speed": {
-                    "prob": 0.7,
-                    "sr": 16000,
-                    "resample_type": "kaiser_fast",
-                    "min_speed_rate": 0.85,
-                    "max_speed_rate": 1.15,
-                },
-                "noise": {
-                    "prob": 0.3,
-                    "min_snr_db": 10,
-                    "max_snr_db": 50,
-                    "noise_type": "white",
-                },
+                # Speed perturbation disabled — distorts vowel length, corrupting
+                # madd distinction which is a core Tajweed grading signal.
                 "gain": {
                     "prob": 0.5,
                     "min_gain_dbfs": -10,
