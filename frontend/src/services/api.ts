@@ -2,7 +2,7 @@
  * API service for Quran Recitation Checker
  */
 import axios from 'axios';
-import type { SurahInfo, AyahInfo, RecitationCheckResponse } from '../types';
+import type { SurahInfo, AyahInfo, RecitationCheckResponse, SurahPageResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -38,6 +38,24 @@ export async function getAyah(surahNumber: number, ayahNumber: number): Promise<
 export async function getSurahAyahs(surahNumber: number): Promise<AyahInfo[]> {
   const response = await axios.get<AyahInfo[]>(`${API_BASE}/surah/${surahNumber}/ayahs`);
   return response.data;
+}
+
+/**
+ * Get all ayahs for a surah for the follow-along page view
+ */
+export async function getSurahPage(surahNumber: number): Promise<SurahPageResponse> {
+  const response = await axios.get<SurahPageResponse>(
+    `${API_BASE}/surah/${surahNumber}/page`
+  );
+  return response.data;
+}
+
+/**
+ * Build WebSocket URL for the streaming recitation endpoint
+ */
+export function getReciteWebSocketUrl(surahNumber: number): string {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${window.location.host}/ws/recite/${surahNumber}`;
 }
 
 /**

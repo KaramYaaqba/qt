@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/ws/:path*",
+      "destination": "https://qt-production-9d82.up.railway.app/ws/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://qt-production-9d82.up.railway.app/api/:path*"
     }

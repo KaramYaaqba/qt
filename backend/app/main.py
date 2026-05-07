@@ -18,7 +18,7 @@ from .config import (
     CORS_ORIGINS,
     DEBUG,
 )
-from .routers import recitation, quran
+from .routers import recitation, quran, streaming
 from .services.speech_to_phoneme import create_service
 from .services.phoneme_reference import PhonemeReferenceService
 from .services.alignment import AlignmentService
@@ -147,6 +147,7 @@ app.add_middleware(
 # Include routers
 app.include_router(recitation.router)
 app.include_router(quran.router)
+app.include_router(streaming.router)
 
 
 @app.get("/", include_in_schema=False)

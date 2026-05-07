@@ -6,7 +6,7 @@ Provides access to surah and ayah metadata.
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 
-from ..models.schemas import SurahInfo, AyahInfo
+from ..models.schemas import SurahInfo, AyahInfo, PageAyahInfo, SurahPageResponse
 
 router = APIRouter(prefix="/api", tags=["quran"])
 
@@ -132,3 +132,39 @@ async def get_surah_ayahs(
         ))
     
     return ayahs
+
+
+@router.get("/surah/{surah_number}/page", response_model=SurahPageResponse)
+async def get_surah_page(
+    surah_number: int,
+    reference_service=Depends(get_reference_service),
+):
+    """
+    Get all ayahs for a surah for the follow-along page view.
+    Returns Arabic text split into words for word-level highlighting.
+    """
+    if not 67 <= surah_number <= 114:
+        raise HTTPException(status_code=400, detail="Surah number must be between 67 and 114")
+
+    surah_info = reference_service.get_surah_info(surah_number)
+    if not surah_info:
+        raise HTTPException(status_code=404, detail=f"Surah {surah_number} not found")
+
+    ayahs = []
+    for ayah_num in range(1, surah_info["ayah_count"] + 1):
+        ref = reference_service.get_reference(surah_number, ayah_num)
+        ayahs.append(PageAyahInfo(
+            surah=surah_number,
+            ayah=ayah_num,
+            text_ar=ref["text_ar"],
+            phonemes=ref["phonemes"],
+            total_phonemes=ref["total_phonemes"],
+            word_list=ref["text_ar"].split(),
+        ))
+
+    return SurahPageResponse(
+        surah_number=surah_number,
+        surah_name_ar=surah_info["surah_name_ar"],
+        surah_name_en=surah_info["surah_name_en"],
+        ayahs=ayahs,
+    )

@@ -129,6 +129,24 @@ class ErrorResponse(BaseModel):
         }
 
 
+class PageAyahInfo(BaseModel):
+    """Ayah data for the follow-along page view."""
+    surah: int
+    ayah: int
+    text_ar: str
+    phonemes: str
+    total_phonemes: int
+    word_list: list[str]
+
+
+class SurahPageResponse(BaseModel):
+    """Full surah data for the follow-along page view (current + context pages)."""
+    surah_number: int
+    surah_name_ar: str
+    surah_name_en: str
+    ayahs: list[PageAyahInfo]
+
+
 class HealthResponse(BaseModel):
     """Health check response."""
     status: str = Field(..., description="Service status")

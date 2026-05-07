@@ -48,6 +48,9 @@ class SpeechToPhonemeService:
         # CTC blank token is typically the last one
         self.blank_id = max(self.vocab.keys()) if self.vocab else 0
 
+        # Reverse map: phoneme string → token_id (used by PositionTracker)
+        self.vocab_str_to_id: dict[str, int] = {v: k for k, v in self.vocab.items()}
+
         # Cache input names for inference
         self.input_names = [inp.name for inp in self.session.get_inputs()]
 
@@ -107,6 +110,32 @@ class SpeechToPhonemeService:
                 phonemes.append(vocab[idx])
             prev = idx
         return phonemes
+
+    def get_logits(self, audio_array: np.ndarray, sample_rate: int = 16000) -> np.ndarray:
+        """Return raw logits (T, vocab_size) for CTC trellis — no decoding."""
+        duration = len(audio_array) / sample_rate
+        if duration <= _SHORT_S:
+            return self._run_onnx(self._log_mel(audio_array, sample_rate))
+
+        # Stride-merge logits for long audio (same windowing as predict())
+        buf_samples = int(_BUFFER_S * sample_rate)
+        step_samples = int(_CHUNK_S * sample_rate)
+        stride_samples = int(_STRIDE_S * sample_rate)
+        keep_frames = int(_CHUNK_S / _FRAME_S)
+        drop_frames = int(_STRIDE_S / _FRAME_S)
+
+        audio_padded = np.pad(audio_array, (stride_samples, buf_samples), mode='constant')
+        all_logits = []
+        start = 0
+        while start + buf_samples <= len(audio_padded):
+            chunk = audio_padded[start: start + buf_samples]
+            logits = self._run_onnx(self._log_mel(chunk, sample_rate))
+            center = logits[drop_frames: drop_frames + keep_frames]
+            if center.shape[0] > 0:
+                all_logits.append(center)
+            start += step_samples
+
+        return np.concatenate(all_logits, axis=0) if all_logits else np.zeros((0, len(self.vocab)), dtype=np.float32)
 
     def predict(
         self,
@@ -193,7 +222,13 @@ class MockSpeechToPhonemeService:
         for v in self.references.values():
             self.all_phonemes.update(v.get("phoneme_list", []))
         self.all_phonemes = list(self.all_phonemes)
-        
+
+        # Build a fake vocab for PositionTracker compatibility
+        self.vocab = {i: p for i, p in enumerate(sorted(self.all_phonemes))}
+        self.vocab[len(self.vocab)] = '<blank>'
+        self.vocab_str_to_id = {v: k for k, v in self.vocab.items()}
+        self.blank_id = self.vocab_str_to_id['<blank>']
+
         # Common substitution pairs for more realistic errors
         self.common_substitutions = {
             "sˤ": ["s", "z"],      # emphatic s
@@ -259,6 +294,11 @@ class MockSpeechToPhonemeService:
                 result.append(p)
                 
         return result
+
+    def get_logits(self, audio_array: np.ndarray, sample_rate: int = 16000) -> np.ndarray:
+        """Return fake logits shaped (T, vocab_size) for mock testing of the trellis."""
+        T = max(10, len(audio_array) // (sample_rate // 50))
+        return np.random.randn(T, len(self.vocab)).astype(np.float32)
 
 
 def create_service(

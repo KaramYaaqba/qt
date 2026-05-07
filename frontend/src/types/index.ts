@@ -53,3 +53,31 @@ export interface RecitationCheckResponse {
 }
 
 export type RecordingState = 'idle' | 'recording' | 'processing';
+
+export interface PageAyahInfo {
+  surah: number;
+  ayah: number;
+  text_ar: string;
+  phonemes: string;
+  total_phonemes: number;
+  word_list: string[];
+}
+
+export interface SurahPageResponse {
+  surah_number: number;
+  surah_name_ar: string;
+  surah_name_en: string;
+  ayahs: PageAyahInfo[];
+}
+
+export interface PositionUpdate {
+  type: 'position' | 'done' | 'error';
+  ayah?: number;
+  word?: number;
+  confidence?: number;
+  letter_results?: LetterResult[];
+  completed_ayah?: boolean;
+  message?: string;
+}
+
+export type FollowAlongState = 'idle' | 'connecting' | 'recording' | 'done';

@@ -11,7 +11,11 @@ import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { getAyah, checkRecitation, getSurah } from '../services/api';
 import type { AyahInfo, RecitationCheckResponse, LetterResult } from '../types';
 
-export function RecitationPage() {
+interface Props {
+  onSwitchMode?: () => void;
+}
+
+export function RecitationPage({ onSwitchMode }: Props) {
   // Selection state
   const [selectedSurah, setSelectedSurah] = useState<number | null>(null);
   const [selectedAyah, setSelectedAyah] = useState<number | null>(null);
@@ -106,12 +110,24 @@ export function RecitationPage() {
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Quran Recitation Checker
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Practice your Tajweed with phoneme-level feedback
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Quran Recitation Checker
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Practice your Tajweed with phoneme-level feedback
+              </p>
+            </div>
+            {onSwitchMode && (
+              <button
+                onClick={onSwitchMode}
+                className="mt-1 bg-blue-600 text-white text-sm px-4 py-2 rounded-full hover:bg-blue-700 transition-colors"
+              >
+                Follow Along ▶
+              </button>
+            )}
+          </div>
         </div>
       </header>
 

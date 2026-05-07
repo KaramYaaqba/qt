@@ -19,10 +19,10 @@ from omegaconf import OmegaConf
 # NeMo 2.x uses lightning (not pytorch_lightning) internally
 try:
     from lightning.pytorch import Trainer, Callback
-    from lightning.pytorch.callbacks import LearningRateMonitor
+    from lightning.pytorch.callbacks import LearningRateMonitor, EarlyStopping
 except ImportError:
     from pytorch_lightning import Trainer, Callback
-    from pytorch_lightning.callbacks import LearningRateMonitor
+    from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping
 
 from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
@@ -392,13 +392,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
             "save_top_k":       3,
             "always_save_nemo": True,
         },
-        "create_early_stopping_callback": True,
-        "early_stopping_callback_params": {
-            "monitor":          "val_wer",
-            "mode":             "min",
-            "patience":         10,  # stop if no improvement for 10 epochs
-            "min_delta":        0.001,
-        },
+        "create_early_stopping_callback": False,  # managed manually via EarlyStopping callback
         "resume_if_exists":            True,
         "resume_ignore_no_checkpoint": True,
     })
@@ -409,6 +403,13 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
             ThreeStageTrainingCallback(),
             ValidationMetricsCallback(),
             LearningRateMonitor(logging_interval="step"),
+            EarlyStopping(
+                monitor="val_wer",
+                mode="min",
+                patience=30,
+                min_delta=0.001,
+                verbose=True,
+            ),
         ],
     )
     exp_manager(trainer, exp_manager_cfg)
