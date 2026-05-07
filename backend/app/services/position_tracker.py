@@ -37,7 +37,7 @@ class PositionTracker:
     """
 
     BLANK_BONUS = 0       # no bonus for blank — let the trellis decide naturally
-    ADVANCE_BIAS = 0.3    # small log-prob bias to prefer advancing over staying
+    ADVANCE_BIAS = 0.1    # small log-prob bias to prefer advancing over staying
     RESET_SILENCE_S = 2   # seconds of silence before auto-reset
 
     def __init__(self, surah: int, reference_service, alignment_service, vocab: dict):

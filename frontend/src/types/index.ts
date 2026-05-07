@@ -57,6 +57,8 @@ export type RecordingState = 'idle' | 'recording' | 'processing';
 export interface PageAyahInfo {
   surah: number;
   ayah: number;
+  surah_name_ar?: string;
+  surah_name_en?: string;
   text_ar: string;
   phonemes: string;
   total_phonemes: number;
@@ -81,3 +83,13 @@ export interface PositionUpdate {
 }
 
 export type FollowAlongState = 'idle' | 'connecting' | 'recording' | 'done';
+
+export interface QuranPage {
+  page_number: number;
+  ayahs: PageAyahInfo[];
+}
+
+export interface CandidatePosition {
+  ayah: number;
+  wordIdx: number;
+}

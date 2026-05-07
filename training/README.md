@@ -6,7 +6,7 @@ This directory contains scripts for training the Conformer-CTC speech-to-phoneme
 
 ## Prerequisites
 
-1. GPU instance with at least 24GB VRAM (A100 recommended)
+1. GPU instance with at least 40GB VRAM (A100 recommended) — required by `subsampling_factor: 4`
 2. Python 3.10+
 3. ~50GB disk space for data and checkpoints
 
@@ -52,18 +52,53 @@ This runs a grid search over key parameters and saves results to `tune_output/tu
 python train_conformer_ctc.py
 ```
 
-**Enhanced training features:**
-- 3-stage progressive unfreezing (encoder freeze → partial → full)
-- Strong data augmentation (speed, noise, gain, spec augment)
-- Early stopping and learning rate monitoring
-- Improved regularization (higher weight decay, longer warmup)
+#### How Training Works
 
-Training parameters:
+The script fine-tunes [NVIDIA's pretrained Arabic FastConformer](https://huggingface.co/nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0) for Quranic phoneme recognition using a three-stage progressive unfreezing strategy. Here is what happens end-to-end:
+
+**Architecture**
+
+The model is a Conformer-CTC-Large (17 layers, 512-dim, ~30M params). Audio is processed as:
+
+```
+Raw audio (16kHz)
+  → Mel spectrogram (80 bands, 25ms window, 10ms stride)
+  → Spec augmentation (frequency & time masking)
+  → Conformer encoder (17 layers, subsampling_factor=4)
+  → CTC decoder (linear projection → 71 phoneme classes)
+```
+
+The subsampling factor is set to **4** (not the default 8) so the encoder produces one output frame every ~40ms. This matters for Tajweed: a subsampling factor of 8 would produce one frame every ~80ms, potentially skipping short phonemic events like Qalqalah or short vowels entirely.
+
+**Weight Initialization**
+
+Rather than training from scratch, the encoder weights are transplanted from the pretrained Arabic model layer-by-layer. Only layers whose shapes match are copied; the CTC decoder head is always freshly initialized because the pretrained model used a BPE vocabulary, not phoneme labels.
+
+**3-Stage Progressive Unfreezing**
+
+Directly fine-tuning all 30M parameters on ~32 hours of data would cause catastrophic forgetting of the pretrained Arabic representations. Instead, training unfreezes the model gradually:
+
+| Stage | Epochs | What is trained | Encoder LR | Decoder LR |
+|-------|--------|-----------------|------------|------------|
+| 1 | 0–4 | Decoder only (encoder frozen) | — | 5e-4 |
+| 2 | 5–9 | Top 50% of encoder layers + decoder | 1e-5 | 1e-4 |
+| 3 | 10+ | Full model (all layers) | 2e-5 | 2e-4 |
+
+Stage 3 starts with a **1,000-step linear warmup** from 10% of the target LR. This prevents the large gradient spike that would otherwise occur the moment the frozen lower encoder layers first receive gradients.
+
+**Why no speed augmentation?**
+
+Most ASR training pipelines apply speed perturbation (±15%) to improve robustness. This is actively harmful for Tajweed grading: the entire Madd (elongation) rules depend on distinguishing short vowels (/a/, /i/, /u/) from their long counterparts (/aː/, /iː/, /uː/). Speed perturbation randomly stretches these, teaching the model that duration is irrelevant. Only gain augmentation (±10 dB) is applied.
+
+**Training parameters:**
 - Model: Conformer-CTC-Large (30M params, 17 layers)
 - Vocabulary: 71 Quranic phoneme symbols
-- Batch size: 20 (increased for better gradient estimates)
-- Max duration: 25s (reduced for more samples/epoch)
-- Expected time: 4-6 hours on A100 with early stopping
+- Subsampling factor: 4 (doubled temporal resolution vs. default 8)
+- Batch size: 20 with 2-step gradient accumulation (effective batch = 40)
+- Max duration: 25s per sample
+- Optimizer: AdamW, cosine annealing, weight decay 5e-4
+- Early stopping: patience 30 epochs on val PER (phoneme error rate)
+- Expected time: 6-8 hours on A100
 
 ### Step 3: Export to ONNX
 

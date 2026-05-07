@@ -164,7 +164,7 @@ async def get_surah_page(
 
     return SurahPageResponse(
         surah_number=surah_number,
-        surah_name_ar=surah_info["surah_name_ar"],
-        surah_name_en=surah_info["surah_name_en"],
+        surah_name_ar=surah_info["name_ar"],
+        surah_name_en=surah_info["name_en"],
         ayahs=ayahs,
     )

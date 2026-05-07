@@ -23,10 +23,10 @@ class VADAccumulator:
 
     SAMPLE_RATE = 16000
     FRAME_MS = 20          # webrtcvad requires 10, 20, or 30ms frames
-    PAUSE_MS = 250         # silence after speech → flush utterance
-    MIN_SPEECH_MS = 200    # minimum speech before we flush
+    PAUSE_MS = 500         # 0.5s silence after speech → flush utterance
+    MIN_SPEECH_MS = 200    # minimum speech to consider valid
     AGGRESSIVENESS = 2     # webrtcvad aggressiveness (0-3)
-    RESET_PAUSE_MS = 3000  # long silence → reset (user stopped)
+    RESET_PAUSE_MS = 2000  # 2s silence → stop tracking until user speaks again
 
     def __init__(self):
         self._frame_bytes = int(self.SAMPLE_RATE * self.FRAME_MS / 1000) * 2  # 2 bytes per Int16

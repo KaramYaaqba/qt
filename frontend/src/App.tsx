@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { RecitationPage } from './pages/RecitationPage';
-import FollowAlongPage from './pages/FollowAlongPage';
+import QuranReaderPage from './pages/QuranReaderPage';
 
-type Mode = 'single' | 'follow';
+type Mode = 'single' | 'quran';
 
 function App() {
   const [mode, setMode] = useState<Mode>('single');
 
-  if (mode === 'follow') {
-    return <FollowAlongPage onBack={() => setMode('single')} />;
+  if (mode === 'quran') {
+    return <QuranReaderPage onBack={() => setMode('single')} />;
   }
 
-  return <RecitationPage onSwitchMode={() => setMode('follow')} />;
+  return <RecitationPage onSwitchMode={() => setMode('quran')} />;
 }
 
 export default App;

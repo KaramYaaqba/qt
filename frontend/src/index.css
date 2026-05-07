@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'AmiriQuran';
+  src: url('/fonts/AmiriQuran.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Arabic text base styles */
 [dir="rtl"] {
   text-align: right;
@@ -10,6 +18,22 @@
 .font-arabic {
   font-family: 'Scheherazade New', 'Amiri', 'Traditional Arabic', serif;
   line-height: 2.5;
+}
+
+/* Quran page font — Amiri Quran for authentic Uthmanic script */
+.font-quran {
+  font-family: 'AmiriQuran', 'Scheherazade New', serif;
+}
+
+/* Mushaf page layout — justified text like a real Quran page */
+.mushaf-page {
+  font-family: 'AmiriQuran', 'Scheherazade New', serif;
+  font-size: 1.6rem;
+  line-height: 2.8;
+  text-align: justify;
+  text-align-last: right;
+  direction: rtl;
+  word-spacing: 0.15em;
 }
 
 /* Smooth transitions for color changes */

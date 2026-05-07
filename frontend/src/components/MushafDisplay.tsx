@@ -1,23 +1,14 @@
 import { useEffect, useRef } from 'react';
-import type { PageAyahInfo, LetterResult } from '../types';
+import type { PageAyahInfo, LetterResult, CandidatePosition } from '../types';
 
-const DIACRITICS = /[ً-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]/;
+const DIACRITICS_RE = /[ً-ٟؐ-ؚۖ-ۜ۟-۪ۤۧۨ-ۭ]/g;
 
 function isDiacritic(ch: string) {
-  return DIACRITICS.test(ch);
+  return DIACRITICS_RE.test(ch);
 }
 
-function groupLetters(text: string): { letter: string; diacritics: string }[] {
-  const groups: { letter: string; diacritics: string }[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (isDiacritic(ch)) {
-      if (groups.length > 0) groups[groups.length - 1].diacritics += ch;
-    } else {
-      groups.push({ letter: ch, diacritics: '' });
-    }
-  }
-  return groups;
+function toArabicNumeral(n: number): string {
+  return n.toString().replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[+d]);
 }
 
 function letterColor(r: LetterResult): string {
@@ -27,42 +18,51 @@ function letterColor(r: LetterResult): string {
   return '';
 }
 
-interface AyahWordSpanProps {
-  ayahInfo: PageAyahInfo;
-  wordIndex: number;
-  word: string;
-  isActiveAyah: boolean;
-  isActiveWord: boolean;
-  letterResults?: LetterResult[];
-  wordCharStart: number;
+// Group a word's characters into (base letter + its diacritics) pairs
+function groupLetters(text: string) {
+  const groups: { letter: string; diacritics: string }[] = [];
+  for (const ch of text) {
+    if (isDiacritic(ch)) {
+      if (groups.length > 0) groups[groups.length - 1].diacritics += ch;
+    } else {
+      groups.push({ letter: ch, diacritics: '' });
+    }
+  }
+  return groups;
 }
 
-function AyahWordSpan({ word, isActiveWord, letterResults, wordCharStart }: AyahWordSpanProps) {
-  const base = isActiveWord
-    ? 'rounded px-0.5 bg-yellow-200 transition-colors duration-100'
-    : 'transition-colors duration-100';
+const BISMILLAH = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ';
+
+// Surahs that don't start with bismillah (At-Tawbah=9, Al-Fatiha handled differently)
+const NO_BISMILLAH = new Set([9]);
+
+interface WordProps {
+  word: string;
+  isActive: boolean;
+  isCandidate: boolean;
+  letterResults: LetterResult[] | undefined;
+  charStart: number;
+}
+
+function Word({ word, isActive, isCandidate, letterResults, charStart }: WordProps) {
+  let bg = '';
+  if (isActive) bg = 'bg-yellow-300 rounded';
+  else if (isCandidate) bg = 'bg-yellow-100 rounded opacity-60';
 
   if (!letterResults) {
-    return <span className={base}>{word}</span>;
+    return <span className={`inline ${bg} px-px`}>{word}</span>;
   }
 
-  // Map letter results by position for this word's chars
-  const resultsByPos = new Map<number, LetterResult>();
-  for (const r of letterResults) {
-    resultsByPos.set(r.position, r);
-  }
-
+  const byPos = new Map(letterResults.map(r => [r.position, r]));
   const groups = groupLetters(word);
-  let charOffset = wordCharStart;
+  let pos = charStart;
 
   return (
-    <span className={base}>
-      {groups.map(({ letter, diacritics }, gi) => {
-        const pos = charOffset++;
-        const r = resultsByPos.get(pos);
-        const color = r ? letterColor(r) : '';
+    <span className={`inline ${bg} px-px`}>
+      {groups.map(({ letter, diacritics }, i) => {
+        const r = byPos.get(pos++);
         return (
-          <span key={gi} className={color}>
+          <span key={i} className={r ? letterColor(r) : ''}>
             {letter}{diacritics}
           </span>
         );
@@ -71,49 +71,26 @@ function AyahWordSpan({ word, isActiveWord, letterResults, wordCharStart }: Ayah
   );
 }
 
-interface AyahRowProps {
-  ayah: PageAyahInfo;
-  isActive: boolean;
-  activeWord: number;
-  letterResults?: LetterResult[];
-  ayahRef: (el: HTMLDivElement | null) => void;
+interface SurahHeaderProps {
+  nameAr: string;
+  nameEn: string;
+  surahNumber: number;
 }
 
-function AyahRow({ ayah, isActive, activeWord, letterResults, ayahRef }: AyahRowProps) {
-  let charCursor = 0;
-
+function SurahHeader({ nameAr, nameEn, surahNumber }: SurahHeaderProps) {
   return (
-    <div
-      ref={ayahRef}
-      className={`px-4 py-3 rounded-lg transition-colors duration-200 ${
-        isActive ? 'bg-blue-50 ring-2 ring-blue-300' : ''
-      }`}
-      dir="rtl"
-    >
-      <span className="font-arabic leading-loose" style={{ fontSize: '1.7rem', lineHeight: '3' }}>
-        {ayah.word_list.map((word, wi) => {
-          const wordCharStart = charCursor;
-          charCursor += word.length + 1; // +1 for space
-          return (
-            <span key={wi}>
-              <AyahWordSpan
-                ayahInfo={ayah}
-                wordIndex={wi}
-                word={word}
-                isActiveAyah={isActive}
-                isActiveWord={isActive && wi === activeWord}
-                letterResults={letterResults}
-                wordCharStart={wordCharStart}
-              />
-              {wi < ayah.word_list.length - 1 && ' '}
-            </span>
-          );
-        })}
-        {/* Ayah number marker */}
-        <span className="inline-block mx-2 text-gray-400 text-base align-middle">
-          ‎﴿{ayah.ayah}﴾
-        </span>
-      </span>
+    <div className="my-4 mx-2">
+      {/* Surah name box */}
+      <div className="border-2 border-amber-700 rounded-lg py-2 px-4 text-center mb-3 bg-amber-50">
+        <p className="font-quran text-amber-900 text-xl">{nameAr}</p>
+        <p className="text-amber-700 text-xs mt-0.5 tracking-wide">{nameEn.toUpperCase()}</p>
+      </div>
+      {/* Bismillah */}
+      {!NO_BISMILLAH.has(surahNumber) && surahNumber !== 1 && (
+        <p className="font-quran text-center text-gray-800 text-xl mb-2">
+          {BISMILLAH}
+        </p>
+      )}
     </div>
   );
 }
@@ -122,33 +99,93 @@ interface MushafDisplayProps {
   ayahs: PageAyahInfo[];
   currentAyah: number;
   currentWord: number;
+  candidates: CandidatePosition[];
   evalResults: Map<number, LetterResult[]>;
 }
 
-export default function MushafDisplay({ ayahs, currentAyah, currentWord, evalResults }: MushafDisplayProps) {
-  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+export default function MushafDisplay({
+  ayahs,
+  currentAyah,
+  currentWord,
+  candidates,
+  evalResults,
+}: MushafDisplayProps) {
+  const activeRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
-    const el = rowRefs.current.get(currentAyah);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [currentAyah, currentWord]);
+
+  const candidateSet = new Set(candidates.map(c => `${c.ayah}:${c.wordIdx}`));
+
+  // Group ayahs by surah to render surah headers
+  const surahGroups: { surahNumber: number; nameAr: string; nameEn: string; ayahs: PageAyahInfo[] }[] = [];
+  for (const ayah of ayahs) {
+    const last = surahGroups[surahGroups.length - 1];
+    if (!last || last.surahNumber !== ayah.surah) {
+      surahGroups.push({
+        surahNumber: ayah.surah,
+        nameAr: ayah.surah_name_ar ?? '',
+        nameEn: ayah.surah_name_en ?? '',
+        ayahs: [ayah],
+      });
+    } else {
+      last.ayahs.push(ayah);
     }
-  }, [currentAyah]);
+  }
 
   return (
-    <div className="space-y-1 py-4">
-      {ayahs.map((ayah) => (
-        <AyahRow
-          key={`${ayah.surah}:${ayah.ayah}`}
-          ayah={ayah}
-          isActive={ayah.ayah === currentAyah}
-          activeWord={currentWord}
-          letterResults={evalResults.get(ayah.ayah)}
-          ayahRef={(el) => {
-            if (el) rowRefs.current.set(ayah.ayah, el);
-            else rowRefs.current.delete(ayah.ayah);
-          }}
-        />
+    <div className="py-4 px-3 bg-amber-50 min-h-full">
+      {surahGroups.map((group) => (
+        <div key={group.surahNumber}>
+          {group.nameAr && (
+            <SurahHeader
+              nameAr={group.nameAr}
+              nameEn={group.nameEn}
+              surahNumber={group.surahNumber}
+            />
+          )}
+
+          {/* Justified Quran text — all ayahs in this surah on this page flow together */}
+          <p className="mushaf-page text-gray-900 px-3">
+            {group.ayahs.map((ayah) => {
+              const results = evalResults.get(ayah.ayah);
+              let charCursor = 0;
+
+              return (
+                <span key={`${ayah.surah}:${ayah.ayah}`}>
+                  {ayah.word_list.map((word, wi) => {
+                    const charStart = charCursor;
+                    charCursor += word.length + 1;
+                    const isActive = ayah.ayah === currentAyah && wi === currentWord;
+                    const isCandidate = candidateSet.has(`${ayah.ayah}:${wi}`);
+
+                    return (
+                      <span
+                        key={wi}
+                        ref={isActive ? el => { activeRef.current = el; } : undefined}
+                      >
+                        <Word
+                          word={word}
+                          isActive={isActive}
+                          isCandidate={isCandidate}
+                          letterResults={results}
+                          charStart={charStart}
+                        />
+                        {' '}
+                      </span>
+                    );
+                  })}
+                  {/* Ayah end marker */}
+                  <span className="text-amber-700 font-quran">
+                    ﴿{toArabicNumeral(ayah.ayah)}﴾
+                  </span>
+                  {' '}
+                </span>
+              );
+            })}
+          </p>
+        </div>
       ))}
     </div>
   );

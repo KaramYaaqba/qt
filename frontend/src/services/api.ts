@@ -2,7 +2,7 @@
  * API service for Quran Recitation Checker
  */
 import axios from 'axios';
-import type { SurahInfo, AyahInfo, RecitationCheckResponse, SurahPageResponse } from '../types';
+import type { SurahInfo, AyahInfo, RecitationCheckResponse, SurahPageResponse, QuranPage } from '../types';
 
 const API_BASE = '/api';
 
@@ -38,6 +38,24 @@ export async function getAyah(surahNumber: number, ayahNumber: number): Promise<
 export async function getSurahAyahs(surahNumber: number): Promise<AyahInfo[]> {
   const response = await axios.get<AyahInfo[]>(`${API_BASE}/surah/${surahNumber}/ayahs`);
   return response.data;
+}
+
+/**
+ * Get Quran page data (ayahs on a specific Mushaf page)
+ */
+export async function getQuranPage(pageNumber: number): Promise<QuranPage> {
+  const response = await axios.get<QuranPage>(`${API_BASE}/page/${pageNumber}`);
+  return response.data;
+}
+
+/**
+ * Get the Mushaf page number where a surah starts
+ */
+export async function getSurahStartPage(surahNumber: number): Promise<number> {
+  const response = await axios.get<{ surah: number; page: number }>(
+    `${API_BASE}/surah/${surahNumber}/startpage`
+  );
+  return response.data.page;
 }
 
 /**

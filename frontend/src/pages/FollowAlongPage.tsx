@@ -1,10 +1,8 @@
-import { useState, useCallback } from 'react';
-import type { SurahPageResponse, LetterResult } from '../types';
+import { useState, useCallback, useEffect } from 'react';
+import type { SurahInfo, SurahPageResponse, LetterResult } from '../types';
 import { getSurahPage, getSurahs } from '../services/api';
 import { useFollowAlongRecorder } from '../hooks/useFollowAlongRecorder';
 import MushafDisplay from '../components/MushafDisplay';
-import { useEffect } from 'react';
-import type { SurahInfo } from '../types';
 
 interface Props {
   onBack: () => void;
@@ -41,7 +39,16 @@ export default function FollowAlongPage({ onBack }: Props) {
     setError(msg);
   }, []);
 
-  const { state, start, stop } = useFollowAlongRecorder({ onWordUpdate, onEvalReady, onDone, onError });
+  const onCandidates = useCallback(() => {}, []);
+
+  const { state, start, stop } = useFollowAlongRecorder({
+    ayahs: surahData?.ayahs ?? [],
+    onWordUpdate,
+    onCandidates,
+    onEvalReady,
+    onDone,
+    onError,
+  });
 
   const handleSurahSelect = async (surahNumber: number) => {
     setSelectedSurah(surahNumber);
@@ -125,6 +132,7 @@ export default function FollowAlongPage({ onBack }: Props) {
             ayahs={surahData.ayahs}
             currentAyah={currentAyah}
             currentWord={currentWord}
+            candidates={[]}
             evalResults={evalResults}
           />
         )}

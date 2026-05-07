@@ -30,16 +30,16 @@ from nemo.utils.exp_manager import exp_manager
 
 
 PRETRAINED_MODEL = "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
-ENCODER_FREEZE_EPOCHS   = 10  # Stage 1 end: decoder only
-ENCODER_PARTIAL_EPOCHS  = 20  # Stage 2 end: top 50% encoder layers + decoder
-# Stage 3: epoch 20+ = full encoder + decoder (lower LRs)
+ENCODER_FREEZE_EPOCHS   = 5   # Stage 1: decoder only
+ENCODER_PARTIAL_EPOCHS  = 10  # Stage 2: top 50% encoder + decoder
+# Stage 3: epoch 10+ = full encoder + decoder with fresh LR reset
 
 # Per-group learning rates
-LR_STAGE1_DECODER  = 5e-4   # decoder only (encoder frozen)
-LR_STAGE2_DECODER  = 1e-4   # partial encoder unfreeze
+LR_STAGE1_DECODER  = 5e-4   # decoder only
+LR_STAGE2_DECODER  = 1e-4   # partial encoder
 LR_STAGE2_ENCODER  = 1e-5
-LR_STAGE3_DECODER  = 5e-5   # full unfreeze
-LR_STAGE3_ENCODER  = 5e-6
+LR_STAGE3_DECODER  = 2e-4   # full unfreeze — higher than before, scheduler will decay it
+LR_STAGE3_ENCODER  = 2e-5   # higher than before so encoder actually learns
 
 
 def _set_optimizer_lrs(trainer, encoder_lr, decoder_lr):
@@ -133,10 +133,45 @@ class ThreeStageTrainingCallback(Callback):
             f"(indices {split}–{len(layers)-1}), added {len(newly_unfrozen)} params to optimizer"
         )
 
+    STAGE3_WARMUP_STEPS = 1000
+
     def _enter_stage3(self, trainer, pl_module):
         pl_module.encoder.unfreeze()
-        _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
-        logging.info("Stage 3: full encoder unfrozen — fine-tuning everything")
+
+        # Start Stage 3 at a low LR; the warmup ramp lets freshly unfrozen
+        # encoder layers "handshake" with the decoder before aggressive updates.
+        warmup_start_lr = LR_STAGE3_ENCODER * 0.1
+        _set_optimizer_lrs(trainer, warmup_start_lr, LR_STAGE3_DECODER * 0.1)
+        self._stage3_start_step = trainer.global_step
+        self._warming_up = True
+
+        # Reset the LR scheduler so Stage 3 gets a fresh cosine decay
+        # from LR_STAGE3 down to min_lr over the remaining epochs
+        scheduler = trainer.lr_scheduler_configs[0].scheduler
+        if hasattr(scheduler, 'last_epoch'):
+            scheduler.last_epoch = 0
+            logging.info("Stage 3: LR scheduler reset for fresh cosine decay")
+
+        logging.info(
+            f"Stage 3: full encoder unfrozen — warming up over "
+            f"{self.STAGE3_WARMUP_STEPS} steps before full LRs"
+        )
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        if not getattr(self, '_warming_up', False):
+            return
+        steps_since = trainer.global_step - self._stage3_start_step
+        if steps_since >= self.STAGE3_WARMUP_STEPS:
+            _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
+            self._warming_up = False
+            logging.info("Stage 3: warmup complete — full LRs engaged")
+        else:
+            frac = steps_since / self.STAGE3_WARMUP_STEPS
+            _set_optimizer_lrs(
+                trainer,
+                LR_STAGE3_ENCODER * 0.1 + LR_STAGE3_ENCODER * 0.9 * frac,
+                LR_STAGE3_DECODER * 0.1 + LR_STAGE3_DECODER * 0.9 * frac,
+            )
 
     def on_train_epoch_start(self, trainer, pl_module):
         epoch = trainer.current_epoch
@@ -225,7 +260,7 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "n_layers": 17,
             "d_model": 512,
             "subsampling": "dw_striding",
-            "subsampling_factor": 8,
+            "subsampling_factor": 4,
             "subsampling_conv_channels": 256,
             "ff_expansion_factor": 4,
             "self_attention_model": "rel_pos_local_attn",
@@ -267,13 +302,9 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "max_duration": 25.0,  # reduced from 30.0 for more samples per epoch
             "min_duration": 0.5,
             "augmentor": {
-                "speed": {
-                    "prob": 0.7,
-                    "sr": 16000,
-                    "resample_type": "kaiser_fast",
-                    "min_speed_rate": 0.85,
-                    "max_speed_rate": 1.15,
-                },
+                # Speed perturbation changes phoneme duration — disabled because
+                # distinguishing short vs. long vowels (e.g. /i/ vs /i:/) is a
+                # core Tajweed grading signal, not noise to be augmented away.
                 "gain": {
                     "prob": 0.5,
                     "min_gain_dbfs": -10,
@@ -299,8 +330,9 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "weight_decay": 5e-4,  # increased from 1e-3 for better regularization
             "sched": {
                 "name": "CosineAnnealing",
-                "warmup_steps": 1000,  # increased warmup
-                "min_lr": 5e-7,        # lower min_lr
+                "warmup_steps": 500,
+                "max_steps": 80000,  # large enough so LR stays useful through all 3 stages
+                "min_lr": 5e-7,
             },
         },
     })
@@ -371,9 +403,9 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
         "devices":                 1,
         "accelerator":             "gpu" if use_gpu else "cpu",
         "max_epochs":              max_epochs,
-        "accumulate_grad_batches": 4,
+        "accumulate_grad_batches": 2,
         "gradient_clip_val":       1.0,
-        "precision":               "32-true",
+        "precision":               "bf16-mixed",  # 2x faster on 4090, stable training
         "log_every_n_steps":       5,
         "val_check_interval":      1.0,
         "enable_checkpointing":    False,  # exp_manager creates its own checkpointer

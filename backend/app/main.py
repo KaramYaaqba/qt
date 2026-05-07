@@ -18,10 +18,11 @@ from .config import (
     CORS_ORIGINS,
     DEBUG,
 )
-from .routers import recitation, quran, streaming
+from .routers import recitation, quran, streaming, page
 from .services.speech_to_phoneme import create_service
 from .services.phoneme_reference import PhonemeReferenceService
 from .services.alignment import AlignmentService
+from .services.page_service import PageService
 from .models.schemas import HealthResponse
 
 # Configure logging
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 speech_service = None
 reference_service = None
 alignment_service = None
+page_service = None
 
 
 @asynccontextmanager
@@ -44,7 +46,7 @@ async def lifespan(app: FastAPI):
     
     Initializes services at startup and cleans up at shutdown.
     """
-    global speech_service, reference_service, alignment_service
+    global speech_service, reference_service, alignment_service, page_service
     
     logger.info("Starting Quran Recitation Checker API...")
     logger.info(f"USE_MOCK={USE_MOCK}")
@@ -61,6 +63,9 @@ async def lifespan(app: FastAPI):
     
     # Initialize alignment service
     alignment_service = AlignmentService()
+
+    # Initialize page service
+    page_service = PageService()
     
     # Initialize speech-to-phoneme service
     if USE_MOCK:
@@ -148,6 +153,7 @@ app.add_middleware(
 app.include_router(recitation.router)
 app.include_router(quran.router)
 app.include_router(streaming.router)
+app.include_router(page.router)
 
 
 @app.get("/", include_in_schema=False)
