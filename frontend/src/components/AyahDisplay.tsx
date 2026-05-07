@@ -62,32 +62,36 @@ export function AyahDisplay({ text, letterResults, onLetterClick }: AyahDisplayP
     groups.push({ letters: [...currentGroup], baseStatus });
   }
 
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'correct':
-        return 'text-green-600';
-      case 'error':
-        return 'text-red-600';
-      case 'partial':
-        return 'text-orange-500';
-      case 'space':
-        return '';
-      default:
-        return 'text-gray-800';
+  // Derive display status from letter + tajweed status:
+  // 'error'         → red   (wrong letter)
+  // 'tajweed_error' → yellow (correct letter, wrong tajweed)
+  // 'correct'       → green
+  const getDisplayStatus = (group: { letters: LetterResult[]; baseStatus: string }): string => {
+    if (group.baseStatus === 'error') return 'error';
+    if (group.baseStatus === 'correct') {
+      const base = group.letters.find(lr => lr.status === 'correct');
+      if (base?.tajweed_status === 'error') return 'tajweed_error';
+    }
+    return group.baseStatus;
+  };
+
+  const getStatusColor = (displayStatus: string): string => {
+    switch (displayStatus) {
+      case 'correct':       return 'text-green-600';
+      case 'tajweed_error': return 'text-yellow-500';
+      case 'error':         return 'text-red-600';
+      case 'space':         return '';
+      default:              return 'text-gray-800';
     }
   };
 
-  const getStatusBg = (status: string, isHovered: boolean): string => {
+  const getStatusBg = (displayStatus: string, isHovered: boolean): string => {
     if (!isHovered) return '';
-    switch (status) {
-      case 'correct':
-        return 'bg-green-100';
-      case 'error':
-        return 'bg-red-100';
-      case 'partial':
-        return 'bg-orange-100';
-      default:
-        return '';
+    switch (displayStatus) {
+      case 'correct':       return 'bg-green-100';
+      case 'tajweed_error': return 'bg-yellow-100';
+      case 'error':         return 'bg-red-100';
+      default:              return '';
     }
   };
 
@@ -98,29 +102,42 @@ export function AyahDisplay({ text, letterResults, onLetterClick }: AyahDisplayP
       className="font-arabic text-3xl md:text-4xl leading-loose p-6 bg-gray-50 rounded-xl"
     >
       {groups.map((group, groupIdx) => {
-        const isError = group.baseStatus === 'error';
+        const displayStatus = getDisplayStatus(group);
         const firstLetter = group.letters[0];
-        
-        if (group.baseStatus === 'space') {
-          return <span key={groupIdx}> </span>;
+
+        const key = `g-${firstLetter?.position ?? groupIdx}`;
+
+        if (displayStatus === 'space') {
+          return <span key={key}> </span>;
+        }
+
+        const isClickable = (displayStatus === 'error' || displayStatus === 'tajweed_error') && !!onLetterClick;
+        const colorClass = `${getStatusColor(displayStatus)} ${getStatusBg(displayStatus, hoveredIndex === groupIdx)} transition-colors rounded px-0.5`;
+        const text = group.letters.map((lr) => lr.letter).join('');
+
+        if (isClickable) {
+          return (
+            <button
+              key={key}
+              type="button"
+              className={`font-arabic inline ${colorClass} cursor-pointer bg-transparent border-0 p-0 m-0 leading-none`}
+              onMouseEnter={() => setHoveredIndex(groupIdx)}
+              onMouseLeave={() => setHoveredIndex(null)}
+              onClick={() => onLetterClick(firstLetter)}
+            >
+              {text}
+            </button>
+          );
         }
 
         return (
           <span
-            key={groupIdx}
-            className={`${getStatusColor(group.baseStatus)} ${getStatusBg(
-              group.baseStatus,
-              hoveredIndex === groupIdx
-            )} cursor-pointer transition-colors rounded px-0.5`}
+            key={key}
+            className={colorClass}
             onMouseEnter={() => setHoveredIndex(groupIdx)}
             onMouseLeave={() => setHoveredIndex(null)}
-            onClick={() => {
-              if (isError && onLetterClick && firstLetter) {
-                onLetterClick(firstLetter);
-              }
-            }}
           >
-            {group.letters.map((lr) => lr.letter).join('')}
+            {text}
           </span>
         );
       })}

@@ -29,7 +29,7 @@ def process_audio(
         target_sr: Target sample rate (default 16000 for ASR)
         
     Returns:
-        Mono audio as numpy float32 array, normalized to [-1, 1]
+        Mono audio as numpy float32 array at 16kHz
         
     Raises:
         ValueError: If audio cannot be processed
@@ -39,7 +39,7 @@ def process_audio(
     # Try direct librosa loading first
     try:
         audio, _ = librosa.load(io.BytesIO(audio_bytes), sr=target_sr, mono=True)
-        return _normalize_audio(audio)
+        return audio.astype(np.float32) if audio.dtype != np.float32 else audio
     except Exception:
         pass
     
@@ -70,7 +70,7 @@ def process_audio(
         )
         
         audio, _ = librosa.load(out_path, sr=target_sr, mono=True)
-        return _normalize_audio(audio)
+        return audio.astype(np.float32) if audio.dtype != np.float32 else audio
         
     except subprocess.CalledProcessError as e:
         raise ValueError(f"ffmpeg conversion failed: {e.stderr.decode()}")
@@ -101,15 +101,7 @@ def _get_extension(content_type: str) -> str:
 
 
 def _normalize_audio(audio: np.ndarray) -> np.ndarray:
-    """
-    Normalize audio to [-1, 1] range.
-    
-    Args:
-        audio: Input audio array
-        
-    Returns:
-        Normalized audio array
-    """
+    """Normalize audio to [-1, 1] range."""
     if audio.dtype != np.float32:
         audio = audio.astype(np.float32)
 

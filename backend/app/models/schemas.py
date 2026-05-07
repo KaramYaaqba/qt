@@ -15,6 +15,10 @@ class LetterResult(BaseModel):
     error_type: Optional[str] = Field(None, description="Type of error: 'replace', 'insert', 'delete'")
     expected_phoneme: Optional[str] = Field(None, description="Expected phoneme (IPA)")
     got_phoneme: Optional[str] = Field(None, description="Detected phoneme (IPA)")
+    tajweed_status: Optional[str] = Field(None, description="Tajweed status: 'correct', 'error', or None for non-letters")
+    tajweed_error_type: Optional[str] = Field(None, description="Tajweed error type: 'replace', 'insert', 'delete'")
+    expected_phoneme_full: Optional[str] = Field(None, description="Expected phoneme before beginner normalization (IPA)")
+    got_phoneme_full: Optional[str] = Field(None, description="Detected phoneme before beginner normalization (IPA)")
 
 
 class PhonemeError(BaseModel):
@@ -28,7 +32,7 @@ class PhonemeError(BaseModel):
 
 class RecitationCheckRequest(BaseModel):
     """Request body for checking recitation (used with form data)."""
-    surah: int = Field(..., ge=78, le=114, description="Surah number (78-114 for Juz' Amma)")
+    surah: int = Field(..., ge=67, le=114, description="Surah number (67-114)")
     ayah: int = Field(..., ge=1, description="Ayah number")
 
 

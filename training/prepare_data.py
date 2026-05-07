@@ -2,11 +2,12 @@
 """
 Prepare Training Data for Quran Speech-to-Phoneme Model
 
-Streams two datasets:
-1. RetaSy/quranic_audio_dataset — non-Arabic speakers (primary)
-2. tarteel-ai/everyayah — professional reciters (supplementary)
+Streams three datasets:
+1. tarteel-ai/everyayah  — professional reciters (~100+ reciters, primary)
+2. tarteel-ai/EA-UD      — diverse reciters with diacritised text (additional professional)
+3. RetaSy/quranic_audio_dataset — non-Arabic speakers (learner audio)
 
-Targets the last 20 surahs of Juz' Amma (95–114).
+Targets Juz' 29 + Juz' Amma (surahs 67–114).
 
 Usage:
     python prepare_data.py [--output_dir ./data]
@@ -94,8 +95,6 @@ SURAH_NAME_TO_NUMBER = {
 # Only keep recordings labeled as correct or unlabeled
 KEEP_LABELS = {"correct", None}
 
-_DEV_MOD  = 9
-_TEST_MOD = 8
 
 _DIACRITICS = re.compile(
     u'[ً-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
@@ -109,11 +108,13 @@ def normalize(text: str) -> str:
     return ' '.join(text.split())
 
 
-def assign_split(idx: int) -> str:
-    r = idx % 10
-    if r == _TEST_MOD:
+def assign_split(surah: int, ayah: int) -> str:
+    # Split by (surah, ayah) so all recordings of the same ayah go to one split.
+    # This ensures dev/test evaluate on content never seen during training.
+    r = (surah * 1000 + ayah) % 10
+    if r == 8:
         return "test"
-    if r == _DEV_MOD:
+    if r == 9:
         return "dev"
     return "train"
 
@@ -122,7 +123,7 @@ def build_ayah_lookup(phonemizer) -> dict:
     """Build normalize(ayah_text) -> (surah, ayah) for target surahs."""
     lookup = {}
     for surah in sorted(TARGET_SURAHS):
-        for ayah in range(1, 30):
+        for ayah in range(1, 300):
             try:
                 result = phonemizer.phonemize(f"{surah}:{ayah}")
                 text = result._text
@@ -202,7 +203,7 @@ def process_retasy(sample, idx, audio_dir, phonemizer, ayah_lookup):
     if not phonemes:
         return None, "no_phonemes"
     entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
-    return (entry, assign_split(idx)) if entry else (None, "resample_failed")
+    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
 
 
 def process_everyayah(sample, idx, audio_dir, phonemizer, ayah_lookup):
@@ -217,7 +218,51 @@ def process_everyayah(sample, idx, audio_dir, phonemizer, ayah_lookup):
     if not phonemes:
         return None, "no_phonemes"
     entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
-    return (entry, assign_split(idx)) if entry else (None, "resample_failed")
+    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
+
+
+def process_ea_ud(sample, idx, audio_dir, phonemizer, ayah_lookup):
+    """Process tarteel-ai/EA-UD — diverse reciters with diacritised transcription.
+
+    EA-UD has no surah/ayah numbers; we match on normalised transcription text
+    exactly like everyayah.  Long recordings (> 30s) are skipped because they
+    cover multiple ayahs and cannot be reliably matched to a single ayah.
+    """
+    # EA-UD fields: audio, duration, transcription
+    duration = sample.get("duration", 0)
+    if duration > 30.0:
+        return None, "too_long"
+    match = ayah_lookup.get(normalize(sample.get("transcription", "")))
+    if match is None:
+        return None, "no_match"
+    surah, ayah = match
+    audio_raw, sr = decode_audio(sample.get("audio", {}), idx)
+    if audio_raw is None:
+        return None, "no_audio"
+    phonemes = get_phonemes(phonemizer, surah, ayah)
+    if not phonemes:
+        return None, "no_phonemes"
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
+    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
+
+
+def process_tarteel(sample, idx, audio_dir, phonemizer):
+    """Process tarteel-ai/tarteel-v1 — crowd-sourced diverse reciters."""
+    # tarteel-v1 fields: surah_number, ayah_number, audio, recitation_id
+    surah = sample.get("surah_number")
+    ayah  = sample.get("ayah_number")
+    if not surah or not ayah:
+        return None, "no_ref"
+    if surah not in TARGET_SURAHS:
+        return None, "out_of_scope"
+    audio_raw, sr = decode_audio(sample.get("audio", {}), idx)
+    if audio_raw is None:
+        return None, "no_audio"
+    phonemes = get_phonemes(phonemizer, surah, ayah)
+    if not phonemes:
+        return None, "no_phonemes"
+    entry = make_entry(audio_raw, sr, surah, ayah, phonemes, idx, audio_dir)
+    return (entry, assign_split(surah, ayah)) if entry else (None, "resample_failed")
 
 
 def save_manifests(manifests: dict, output_path: Path):
@@ -299,7 +344,31 @@ def prepare_data(output_dir: str = "./data"):
     except Exception as e:
         print(f"everyayah load failed: {e}")
 
-    print(f"everyayah done: {processed - retasy_count} samples")
+    everyayah_count = processed - retasy_count
+    print(f"everyayah done: {everyayah_count} samples")
+
+    # --- Dataset 3: EA-UD (diverse reciters, diacritised text, text-matched) ---
+    print("\nLoading EA-UD dataset (diverse reciters)...")
+    try:
+        ds_ea_ud = load_dataset("tarteel-ai/EA-UD", split="train", streaming=True)
+        ds_ea_ud = ds_ea_ud.cast_column("audio", datasets_Audio(decode=False))
+        ea_ud_processed = 0
+        for idx, sample in enumerate(ds_ea_ud):
+            # Offset avoids filename collisions: RetaSy 0-499999, everyayah 500000-999999
+            entry, result = process_ea_ud(sample, idx + 1000000, audio_dir, phonemizer, ayah_lookup)
+            if entry is None:
+                skipped += 1
+                continue
+            manifests[result].append(entry)
+            processed += 1
+            ea_ud_processed += 1
+            if ea_ud_processed % 500 == 0:
+                print(f"  EA-UD: {ea_ud_processed} processed (scanned {idx+1} total)...")
+    except Exception as e:
+        print(f"EA-UD load failed: {e}")
+
+    ea_ud_count = processed - retasy_count - everyayah_count
+    print(f"EA-UD done: {ea_ud_count} samples")
     print(f"\nTotal: {processed} processed, {skipped} skipped")
 
     save_manifests(manifests, output_path)

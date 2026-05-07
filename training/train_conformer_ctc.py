@@ -19,8 +19,10 @@ from omegaconf import OmegaConf
 # NeMo 2.x uses lightning (not pytorch_lightning) internally
 try:
     from lightning.pytorch import Trainer, Callback
+    from lightning.pytorch.callbacks import LearningRateMonitor
 except ImportError:
     from pytorch_lightning import Trainer, Callback
+    from pytorch_lightning.callbacks import LearningRateMonitor
 
 from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCBPEModel
 from nemo.utils import logging
@@ -52,6 +54,32 @@ def _set_optimizer_lrs(trainer, encoder_lr, decoder_lr):
     logging.info(f"  LR → encoder={encoder_lr}, decoder={decoder_lr}")
 
 
+def _unfreeze_top_layers(encoder, layers, split):
+    """Unfreeze layers[split:] and the encoder's final norm; return unfrozen params."""
+    unfrozen = []
+    for layer in layers[split:]:
+        for p in layer.parameters():
+            p.requires_grad = True
+            unfrozen.append(p)
+    if hasattr(encoder, "norm"):
+        for p in encoder.norm.parameters():
+            p.requires_grad = True
+            unfrozen.append(p)
+    return unfrozen
+
+
+def _add_params_to_enc_group(optimizer, params):
+    """Add params to the named 'encoder' group so they receive gradient updates."""
+    enc_group = next((g for g in optimizer.param_groups if g.get("name") == "encoder"), None)
+    if enc_group is None:
+        return
+    existing = {id(p) for p in enc_group["params"]}
+    for p in params:
+        if id(p) not in existing:
+            enc_group["params"].append(p)
+            existing.add(id(p))
+
+
 class ThreeStageTrainingCallback(Callback):
     """
     3-stage progressive unfreezing:
@@ -61,42 +89,63 @@ class ThreeStageTrainingCallback(Callback):
     """
 
     def on_train_start(self, trainer, pl_module):
-        """Tag optimizer param groups as 'encoder' or 'decoder' for LR targeting."""
+        # NeMo creates a single param group by default, so we split it into two:
+        # one for encoder params and one for everything else (decoder + preprocessor).
         optimizer = trainer.optimizers[0]
-        encoder_params = {id(p) for p in pl_module.encoder.parameters()}
-        for group in optimizer.param_groups:
-            is_encoder = all(id(p) in encoder_params for p in group["params"])
-            group["name"] = "encoder" if is_encoder else "decoder"
-        logging.info("Optimizer param groups tagged: encoder / decoder")
+        if len(optimizer.param_groups) == 1:
+            encoder_params = {id(p) for p in pl_module.encoder.parameters()}
+            enc_group = {"params": [], "name": "encoder"}
+            dec_group = {"params": [], "name": "decoder"}
+            for p in optimizer.param_groups[0]["params"]:
+                (enc_group if id(p) in encoder_params else dec_group)["params"].append(p)
+            # Copy base hyperparams from the original group, then replace
+            base = {k: v for k, v in optimizer.param_groups[0].items() if k != "params"}
+            enc_group.update(base)
+            dec_group.update(base)
+            optimizer.param_groups.clear()
+            optimizer.add_param_group(enc_group)
+            optimizer.add_param_group(dec_group)
+            logging.info(
+                f"Split optimizer into 2 groups: "
+                f"{len(enc_group['params'])} encoder params, "
+                f"{len(dec_group['params'])} decoder params"
+            )
+        else:
+            for group in optimizer.param_groups:
+                if "name" not in group:
+                    encoder_params = {id(p) for p in pl_module.encoder.parameters()}
+                    is_enc = all(id(p) in encoder_params for p in group["params"])
+                    group["name"] = "encoder" if is_enc else "decoder"
+            logging.info("Optimizer param groups tagged: encoder / decoder")
+
+    def _enter_stage1(self, trainer, pl_module):
+        pl_module.encoder.freeze()
+        logging.info("Stage 1: encoder frozen — training decoder only")
+
+    def _enter_stage2(self, trainer, pl_module):
+        layers = list(pl_module.encoder.layers)
+        split = len(layers) // 2
+        newly_unfrozen = _unfreeze_top_layers(pl_module.encoder, layers, split)
+        _add_params_to_enc_group(trainer.optimizers[0], newly_unfrozen)
+        _set_optimizer_lrs(trainer, LR_STAGE2_ENCODER, LR_STAGE2_DECODER)
+        logging.info(
+            f"Stage 2: unfroze top {len(layers) - split}/{len(layers)} encoder layers "
+            f"(indices {split}–{len(layers)-1}), added {len(newly_unfrozen)} params to optimizer"
+        )
+
+    def _enter_stage3(self, trainer, pl_module):
+        pl_module.encoder.unfreeze()
+        _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
+        logging.info("Stage 3: full encoder unfrozen — fine-tuning everything")
 
     def on_train_epoch_start(self, trainer, pl_module):
         epoch = trainer.current_epoch
-
         if epoch == 0:
-            pl_module.encoder.freeze()
-            logging.info("Stage 1: encoder frozen — training decoder only")
-
+            self._enter_stage1(trainer, pl_module)
         elif epoch == ENCODER_FREEZE_EPOCHS:
-            # Unfreeze top 50% of encoder layers (layers 9–16 of 17)
-            layers = list(pl_module.encoder.layers)
-            split = len(layers) // 2
-            for layer in layers[split:]:
-                for p in layer.parameters():
-                    p.requires_grad = True
-            # Also unfreeze the final norm if present
-            if hasattr(pl_module.encoder, "norm"):
-                for p in pl_module.encoder.norm.parameters():
-                    p.requires_grad = True
-            _set_optimizer_lrs(trainer, LR_STAGE2_ENCODER, LR_STAGE2_DECODER)
-            logging.info(
-                f"Stage 2: unfroze top {len(layers) - split}/{len(layers)} encoder layers "
-                f"(indices {split}–{len(layers)-1})"
-            )
-
+            self._enter_stage2(trainer, pl_module)
         elif epoch == ENCODER_PARTIAL_EPOCHS:
-            pl_module.encoder.unfreeze()
-            _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
-            logging.info("Stage 3: full encoder unfrozen — fine-tuning everything")
+            self._enter_stage3(trainer, pl_module)
 
 
 class ValidationMetricsCallback(Callback):
@@ -147,19 +196,26 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "window_size": 0.025,
             "window_stride": 0.01,
             "window": "hann",
-            "features": 80,        # match pretrained model (80 mel bins) so weights transfer
+            "features": 80,
             "n_fft": 512,
             "frame_splicing": 1,
-            "dither": 0.00001,
+            "dither": 0.00001,     # training-only noise (disabled at eval automatically)
             "pad_to": 0,
+            # Explicit NeMo defaults — match pretrained Arabic model exactly
+            "preemph": 0.97,                # high-freq boost; critical for Arabic fricatives
+            "mel_norm": "slaney",           # area-normalized mel filterbank
+            "log_zero_guard_type": "add",
+            "log_zero_guard_value": 2e-24,  # NeMo default (2**-24)
+            "mag_power": 2.0,               # power spectrum
         },
 
         "spec_augment": {
             "_target_": "nemo.collections.asr.modules.SpectrogramAugmentation",
-            "freq_masks": 2,
-            "freq_width": 27,
-            "time_masks": 5,
-            "time_width": 0.05,
+            # Stronger augmentation reduces overfitting on limited samples
+            "freq_masks": 6,       # increased from 4
+            "freq_width": 30,      # increased from 27
+            "time_masks": 12,      # increased from 10
+            "time_width": 0.06,    # increased from 0.05
         },
 
         "encoder": {
@@ -203,13 +259,33 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
         "train_ds": {
             "manifest_filepath": train_manifest,
             "sample_rate": 16000,
-            "batch_size": 16,
+            "batch_size": 20,  # increased from 16
             "shuffle": True,
             "num_workers": 8,
             "pin_memory": True,
             "trim_silence": False,
-            "max_duration": 30.0,
+            "max_duration": 25.0,  # reduced from 30.0 for more samples per epoch
             "min_duration": 0.5,
+            "augmentor": {
+                "speed": {
+                    "prob": 0.7,
+                    "sr": 16000,
+                    "resample_type": "kaiser_fast",
+                    "min_speed_rate": 0.85,
+                    "max_speed_rate": 1.15,
+                },
+                "noise": {
+                    "prob": 0.3,
+                    "min_snr_db": 10,
+                    "max_snr_db": 50,
+                    "noise_type": "white",
+                },
+                "gain": {
+                    "prob": 0.5,
+                    "min_gain_dbfs": -10,
+                    "max_gain_dbfs": 10,
+                },
+            },
         },
 
         "validation_ds": {
@@ -226,11 +302,11 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "name": "adamw",
             "lr": LR_STAGE1_DECODER,
             "betas": [0.9, 0.98],
-            "weight_decay": 1e-3,
+            "weight_decay": 5e-4,  # increased from 1e-3 for better regularization
             "sched": {
                 "name": "CosineAnnealing",
-                "warmup_steps": 500,
-                "min_lr": 1e-6,
+                "warmup_steps": 1000,  # increased warmup
+                "min_lr": 5e-7,        # lower min_lr
             },
         },
     })
@@ -317,10 +393,17 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
         "create_tensorboard_logger":  True,
         "create_checkpoint_callback": True,
         "checkpoint_callback_params": {
-            "monitor":          "val_loss",
+            "monitor":          "val_wer",
             "mode":             "min",
             "save_top_k":       3,
             "always_save_nemo": True,
+        },
+        "create_early_stopping_callback": True,
+        "early_stopping_callback_params": {
+            "monitor":          "val_wer",
+            "mode":             "min",
+            "patience":         10,  # stop if no improvement for 10 epochs
+            "min_delta":        0.001,
         },
         "resume_if_exists":            True,
         "resume_ignore_no_checkpoint": True,
@@ -328,7 +411,11 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
 
     trainer = Trainer(
         **OmegaConf.to_container(trainer_cfg, resolve=True),
-        callbacks=[ThreeStageTrainingCallback(), ValidationMetricsCallback()],
+        callbacks=[
+            ThreeStageTrainingCallback(),
+            ValidationMetricsCallback(),
+            LearningRateMonitor(logging_interval="step"),
+        ],
     )
     exp_manager(trainer, exp_manager_cfg)
 

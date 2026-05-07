@@ -26,6 +26,10 @@ export interface LetterResult {
   error_type?: 'replace' | 'insert' | 'delete';
   expected_phoneme?: string;
   got_phoneme?: string;
+  tajweed_status?: 'correct' | 'error';
+  tajweed_error_type?: 'replace' | 'insert' | 'delete';
+  expected_phoneme_full?: string;
+  got_phoneme_full?: string;
 }
 
 export interface PhonemeError {

@@ -31,23 +31,39 @@ python prepare_data.py
 ```
 
 This will:
-- Download `tarteel-ai/everyayah` from HuggingFace
+- Download `tarteel-ai/everyayah`, `tarteel-ai/EA-UD`, and `RetaSy/quranic_audio_dataset`
 - Filter to Juz' Amma (surahs 78-114)
 - Generate phoneme labels using Quranic Phonemizer
 - Create NeMo manifest files (train/dev/test)
 
-### Step 2: Train Model
+### Step 2: Optional - Hyperparameter Tuning
+
+Find optimal hyperparameters:
+
+```bash
+python tune_hyperparameters.py
+```
+
+This runs a grid search over key parameters and saves results to `tune_output/tuning_results.json`.
+
+### Step 3: Train Model
 
 ```bash
 python train_conformer_ctc.py
 ```
 
+**Enhanced training features:**
+- 3-stage progressive unfreezing (encoder freeze → partial → full)
+- Strong data augmentation (speed, noise, gain, spec augment)
+- Early stopping and learning rate monitoring
+- Improved regularization (higher weight decay, longer warmup)
+
 Training parameters:
-- Model: Conformer-CTC-Small (30M params)
+- Model: Conformer-CTC-Large (30M params, 17 layers)
 - Vocabulary: 71 Quranic phoneme symbols
-- Epochs: ~50 (with early stopping)
-- Batch size: 16 (adjust based on VRAM)
-- Expected time: 3-5 hours on A100
+- Batch size: 20 (increased for better gradient estimates)
+- Max duration: 25s (reduced for more samples/epoch)
+- Expected time: 4-6 hours on A100 with early stopping
 
 ### Step 3: Export to ONNX
 
@@ -73,10 +89,11 @@ Then set `USE_MOCK=false` in your environment.
 
 ## Files
 
-- `prepare_data.py` - Data downloading and preprocessing
-- `train_conformer_ctc.py` - Model training script
+- `prepare_data.py` - Data downloading and preprocessing (multiple datasets)
+- `train_conformer_ctc.py` - Enhanced model training with improved augmentation and regularization
+- `tune_hyperparameters.py` - Hyperparameter optimization script
 - `export_onnx.py` - ONNX export and quantization
-- `requirements-training.txt` - Training dependencies
+- `requirements-training.txt` - Training dependencies (consolidated)
 
 ## Custom Phoneme Vocabulary
 
