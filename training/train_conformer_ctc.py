@@ -274,11 +274,6 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
                     "min_speed_rate": 0.85,
                     "max_speed_rate": 1.15,
                 },
-                "noise": {
-                    "prob": 0.3,
-                    "min_snr_db": 10,
-                    "max_snr_db": 50,
-                },
                 "gain": {
                     "prob": 0.5,
                     "min_gain_dbfs": -10,
