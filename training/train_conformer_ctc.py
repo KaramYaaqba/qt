@@ -41,8 +41,8 @@ ENCODER_PARTIAL_EPOCHS  = 15  # Stage 2: top 50% encoder + decoder
 LR_STAGE1_DECODER  = 3e-3   # higher LR to break blank collapse fast in Stage 1
 LR_STAGE2_DECODER  = 5e-4   # back off once encoder starts contributing
 LR_STAGE2_ENCODER  = 5e-5
-LR_STAGE3_DECODER  = 2e-4   # fine-tuning rate
-LR_STAGE3_ENCODER  = 1e-5   # 20x lower than decoder to protect pretrained weights
+LR_STAGE3_DECODER  = 5e-5   # conservative fine-tuning — model already trained, avoid overshooting
+LR_STAGE3_ENCODER  = 5e-6   # 10x lower than decoder
 
 
 def _set_optimizer_lrs(trainer, encoder_lr, decoder_lr):
