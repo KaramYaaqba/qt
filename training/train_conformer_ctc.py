@@ -41,8 +41,8 @@ ENCODER_PARTIAL_EPOCHS  = 10  # Stage 2: top 50% encoder + decoder
 LR_STAGE1_DECODER  = 5e-4   # decoder only
 LR_STAGE2_DECODER  = 1e-4   # partial encoder
 LR_STAGE2_ENCODER  = 1e-5
-LR_STAGE3_DECODER  = 2e-4   # full unfreeze — higher than before, scheduler will decay it
-LR_STAGE3_ENCODER  = 2e-5   # higher than before so encoder actually learns
+LR_STAGE3_DECODER  = 5e-4   # match Stage 1 decoder LR — scheduler disabled in Stage 3
+LR_STAGE3_ENCODER  = 2e-5   # 25x lower than decoder to protect pretrained weights
 
 
 def _set_optimizer_lrs(trainer, encoder_lr, decoder_lr):
@@ -141,24 +141,22 @@ class ThreeStageTrainingCallback(Callback):
     def _enter_stage3(self, trainer, pl_module):
         pl_module.encoder.unfreeze()
 
-        # Start Stage 3 at a low LR; the warmup ramp lets freshly unfrozen
-        # encoder layers "handshake" with the decoder before aggressive updates.
+        # Disable the LR scheduler for Stage 3 — it conflicts with manual LR
+        # control during warmup and decays LRs too aggressively afterward.
+        for config in trainer.lr_scheduler_configs:
+            config.scheduler.base_lrs = [LR_STAGE3_DECODER, LR_STAGE3_DECODER]
+            config.interval = "epoch"
+            config.frequency = 99999  # effectively disabled
+
         warmup_start_lr = LR_STAGE3_ENCODER * 0.1
         _set_optimizer_lrs(trainer, warmup_start_lr, LR_STAGE3_DECODER * 0.1)
         self._stage3_start_step = trainer.global_step
         self._warming_up = True
 
-        # Reset the LR scheduler so Stage 3 gets a fresh cosine decay
-        # from LR_STAGE3 down to min_lr over the remaining epochs
-        scheduler = trainer.lr_scheduler_configs[0].scheduler
-        if hasattr(scheduler, 'last_epoch'):
-            scheduler.last_epoch = -1
-            scheduler.step()
-            logging.info("Stage 3: LR scheduler reset for fresh cosine decay")
-
         logging.info(
             f"Stage 3: full encoder unfrozen — warming up over "
-            f"{self.STAGE3_WARMUP_STEPS} steps before full LRs"
+            f"{self.STAGE3_WARMUP_STEPS} steps before full LRs "
+            f"(encoder={LR_STAGE3_ENCODER}, decoder={LR_STAGE3_DECODER})"
         )
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
@@ -430,7 +428,7 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
         "create_tensorboard_logger":  True,
         "create_checkpoint_callback": True,
         "checkpoint_callback_params": {
-            "monitor":          "val_wer",
+            "monitor":          "val_loss",  # track loss until WER becomes meaningful
             "mode":             "min",
             "save_top_k":       3,
             "always_save_nemo": True,
@@ -447,10 +445,10 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
             ValidationMetricsCallback(),
             LearningRateMonitor(logging_interval="step"),
             EarlyStopping(
-                monitor="val_wer",
+                monitor="val_loss",  # monitor loss not WER — WER stays 100% until decoder clicks
                 mode="min",
-                patience=30,
-                min_delta=0.001,
+                patience=15,
+                min_delta=0.1,
                 verbose=True,
             ),
         ],
