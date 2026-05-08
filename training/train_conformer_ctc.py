@@ -384,7 +384,8 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
     return model
 
 
-def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: int = 100):
+def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: int = 100,
+          resume_weights: str = None):
     data_path   = Path(data_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -400,11 +401,49 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
     vocab = load_vocab(str(vocab_path))
     logging.info(f"Vocabulary size (non-blank): {len(vocab)}")
 
-    model = build_ctc_model(
-        vocab=vocab,
-        train_manifest=str(train_manifest),
-        val_manifest=str(val_manifest),
-    )
+    if resume_weights:
+        # Load weights only from a .nemo file — fresh optimizer, fresh scheduler.
+        # Use this to continue from a prior run without inheriting broken LR state.
+        logging.info(f"Loading weights from: {resume_weights}")
+        model = EncDecCTCModel.restore_from(resume_weights, map_location="cpu")
+        model.setup_training_data(OmegaConf.create({
+            "manifest_filepath": str(train_manifest),
+            "sample_rate": 16000,
+            "batch_size": 8,
+            "shuffle": True,
+            "num_workers": 8,
+            "pin_memory": True,
+            "trim_silence": False,
+            "max_duration": 25.0,
+            "min_duration": 0.5,
+        }))
+        model.setup_validation_data(OmegaConf.create({
+            "manifest_filepath": str(val_manifest),
+            "sample_rate": 16000,
+            "batch_size": 8,
+            "shuffle": False,
+            "num_workers": 8,
+            "pin_memory": True,
+            "trim_silence": False,
+        }))
+        model.setup_optimization(OmegaConf.create({
+            "name": "adamw",
+            "lr": LR_STAGE3_DECODER,
+            "betas": [0.9, 0.98],
+            "weight_decay": 5e-4,
+            "sched": {
+                "name": "CosineAnnealing",
+                "warmup_steps": 500,
+                "max_steps": 28000,
+                "min_lr": 5e-7,
+            },
+        }))
+    else:
+        model = build_ctc_model(
+            vocab=vocab,
+            train_manifest=str(train_manifest),
+            val_manifest=str(val_manifest),
+        )
 
     use_gpu = torch.cuda.is_available()
 
@@ -466,8 +505,10 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir",    default="./data")
-    parser.add_argument("--output_dir",  default="./output")
-    parser.add_argument("--max_epochs",  default=100, type=int)
+    parser.add_argument("--data_dir",       default="./data")
+    parser.add_argument("--output_dir",     default="./output")
+    parser.add_argument("--max_epochs",     default=100, type=int)
+    parser.add_argument("--resume_weights", default=None,
+                        help="Path to .nemo file to load weights from (fresh optimizer)")
     args = parser.parse_args()
-    train(args.data_dir, args.output_dir, args.max_epochs)
+    train(args.data_dir, args.output_dir, args.max_epochs, args.resume_weights)
