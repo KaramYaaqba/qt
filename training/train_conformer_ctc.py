@@ -499,13 +499,16 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
         "create_tensorboard_logger":  True,
         "create_checkpoint_callback": True,
         "checkpoint_callback_params": {
-            "monitor":          "val_loss",  # track loss until WER becomes meaningful
+            "monitor":          "val_loss",
             "mode":             "min",
             "save_top_k":       3,
             "always_save_nemo": True,
         },
-        "create_early_stopping_callback": False,  # managed manually via EarlyStopping callback
-        "resume_if_exists":            True,
+        "create_early_stopping_callback": False,
+        # When resuming from weights only, do NOT let exp_manager pick up the
+        # existing .ckpt — it would restore the old optimizer state (2 param
+        # groups) which conflicts with the freshly built 1-group optimizer.
+        "resume_if_exists":            not bool(resume_weights),
         "resume_ignore_no_checkpoint": True,
     })
 
