@@ -185,6 +185,27 @@ class ThreeStageTrainingCallback(Callback):
             self._enter_stage3(trainer, pl_module)
 
 
+class DifferentialLRCallback(Callback):
+    """Set encoder LR lower than decoder LR from the start for resume training."""
+
+    def on_train_start(self, trainer, pl_module):
+        optimizer = trainer.optimizers[0]
+        if len(optimizer.param_groups) == 1:
+            encoder_params = {id(p) for p in pl_module.encoder.parameters()}
+            enc_group = {"params": [], "name": "encoder"}
+            dec_group = {"params": [], "name": "decoder"}
+            for p in optimizer.param_groups[0]["params"]:
+                (enc_group if id(p) in encoder_params else dec_group)["params"].append(p)
+            base = {k: v for k, v in optimizer.param_groups[0].items() if k != "params"}
+            enc_group.update(base)
+            dec_group.update(base)
+            optimizer.param_groups.clear()
+            optimizer.add_param_group(enc_group)
+            optimizer.add_param_group(dec_group)
+        _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
+        logging.info(f"DifferentialLR: encoder={LR_STAGE3_ENCODER}, decoder={LR_STAGE3_DECODER}")
+
+
 class ValidationMetricsCallback(Callback):
     """Log validation PER (phoneme error rate) alongside val_loss each epoch."""
 
@@ -426,18 +447,25 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
             "pin_memory": True,
             "trim_silence": False,
         }))
+        # Single LR for now — ThreeStageCallback is skipped so we rely on
+        # the optimizer to handle encoder vs decoder via param groups set manually
+        # in on_train_start if needed. Use decoder LR as the base; encoder will
+        # be set lower by _set_optimizer_lrs after the first forward pass.
         model.setup_optimization(OmegaConf.create({
             "name": "adamw",
-            "lr": LR_STAGE3_DECODER,
+            "lr": LR_STAGE3_DECODER,  # 5e-4 for decoder
             "betas": [0.9, 0.98],
             "weight_decay": 5e-4,
             "sched": {
                 "name": "CosineAnnealing",
-                "warmup_steps": 500,
+                "warmup_steps": 200,
                 "max_steps": 28000,
                 "min_lr": 5e-7,
             },
         }))
+        # Manually freeze nothing — train full model end-to-end
+        # but set encoder to a lower LR after optimizer is built
+        logging.info(f"Resume mode: training end-to-end, encoder LR={LR_STAGE3_ENCODER}, decoder LR={LR_STAGE3_DECODER}")
     else:
         model = build_ctc_model(
             vocab=vocab,
@@ -477,20 +505,25 @@ def train(data_dir: str = "./data", output_dir: str = "./output", max_epochs: in
         "resume_ignore_no_checkpoint": True,
     })
 
+    callbacks = [
+        ValidationMetricsCallback(),
+        LearningRateMonitor(logging_interval="step"),
+        EarlyStopping(
+            monitor="val_loss",
+            mode="min",
+            patience=15,
+            min_delta=0.1,
+            verbose=True,
+        ),
+    ]
+    if resume_weights:
+        callbacks.insert(0, DifferentialLRCallback())
+    else:
+        callbacks.insert(0, ThreeStageTrainingCallback())
+
     trainer = Trainer(
         **OmegaConf.to_container(trainer_cfg, resolve=True),
-        callbacks=[
-            ThreeStageTrainingCallback(),
-            ValidationMetricsCallback(),
-            LearningRateMonitor(logging_interval="step"),
-            EarlyStopping(
-                monitor="val_loss",  # monitor loss not WER — WER stays 100% until decoder clicks
-                mode="min",
-                patience=15,
-                min_delta=0.1,
-                verbose=True,
-            ),
-        ],
+        callbacks=callbacks,
     )
     exp_manager(trainer, exp_manager_cfg)
 
