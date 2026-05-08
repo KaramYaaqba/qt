@@ -33,16 +33,16 @@ from nemo.utils.exp_manager import exp_manager
 
 
 PRETRAINED_MODEL = "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
-ENCODER_FREEZE_EPOCHS   = 5   # Stage 1: decoder only
-ENCODER_PARTIAL_EPOCHS  = 10  # Stage 2: top 50% encoder + decoder
-# Stage 3: epoch 10+ = full encoder + decoder with fresh LR reset
+ENCODER_FREEZE_EPOCHS   = 8   # Stage 1: decoder only (more epochs to escape blank collapse)
+ENCODER_PARTIAL_EPOCHS  = 15  # Stage 2: top 50% encoder + decoder
+# Stage 3: epoch 15+ = full encoder + decoder with fresh LR reset
 
 # Per-group learning rates
-LR_STAGE1_DECODER  = 5e-4   # decoder only
-LR_STAGE2_DECODER  = 1e-4   # partial encoder
-LR_STAGE2_ENCODER  = 1e-5
-LR_STAGE3_DECODER  = 5e-4   # match Stage 1 decoder LR — scheduler disabled in Stage 3
-LR_STAGE3_ENCODER  = 2e-5   # 25x lower than decoder to protect pretrained weights
+LR_STAGE1_DECODER  = 3e-3   # higher LR to break blank collapse fast in Stage 1
+LR_STAGE2_DECODER  = 5e-4   # back off once encoder starts contributing
+LR_STAGE2_ENCODER  = 5e-5
+LR_STAGE3_DECODER  = 2e-4   # fine-tuning rate
+LR_STAGE3_ENCODER  = 1e-5   # 20x lower than decoder to protect pretrained weights
 
 
 def _set_optimizer_lrs(trainer, encoder_lr, decoder_lr):
@@ -86,9 +86,9 @@ def _add_params_to_enc_group(optimizer, params):
 class ThreeStageTrainingCallback(Callback):
     """
     3-stage progressive unfreezing:
-      Stage 1 (epochs 0–4):   encoder fully frozen, decoder only
-      Stage 2 (epochs 5–9):   top 50% encoder layers unfrozen, lower LRs
-      Stage 3 (epochs 10+):   full encoder unfrozen, warmup then full LRs
+      Stage 1 (epochs 0–7):   encoder fully frozen, decoder only (high LR, no scheduler)
+      Stage 2 (epochs 8–14):  top 50% encoder layers unfrozen, scheduler re-enabled
+      Stage 3 (epochs 15+):   full encoder unfrozen, warmup then full LRs
     """
 
     def on_train_start(self, trainer, pl_module):
@@ -123,14 +123,31 @@ class ThreeStageTrainingCallback(Callback):
 
     def _enter_stage1(self, trainer, pl_module):
         pl_module.encoder.freeze()
-        logging.info("Stage 1: encoder frozen — training decoder only")
+        # Bypass the warmup scheduler in Stage 1 — it would spend the first 500
+        # steps ramping up from near-zero, starving the decoder of gradient signal
+        # exactly when it needs to break out of blank collapse.
+        for config in trainer.lr_scheduler_configs:
+            config.frequency = 99999  # disable scheduler for Stage 1
+        _set_optimizer_lrs(trainer, 0.0, LR_STAGE1_DECODER)
+        logging.info(f"Stage 1: encoder frozen — decoder LR={LR_STAGE1_DECODER} (scheduler disabled)")
 
     def _enter_stage2(self, trainer, pl_module):
         layers = list(pl_module.encoder.layers)
         split = len(layers) // 2
         newly_unfrozen = _unfreeze_top_layers(pl_module.encoder, layers, split)
         _add_params_to_enc_group(trainer.optimizers[0], newly_unfrozen)
+        # Re-enable the scheduler for Stage 2 now that the decoder is stable
+        for config in trainer.lr_scheduler_configs:
+            config.frequency = 1
         _set_optimizer_lrs(trainer, LR_STAGE2_ENCODER, LR_STAGE2_DECODER)
+        # Ramp up spec augmentation now that the decoder can handle noisier inputs
+        spec_aug = pl_module.spec_augmentation
+        if spec_aug is not None:
+            spec_aug.freq_masks  = 4
+            spec_aug.freq_width  = 27
+            spec_aug.time_masks  = 8
+            spec_aug.time_width  = 0.05
+            logging.info("Stage 2: spec augmentation increased")
         logging.info(
             f"Stage 2: unfroze top {len(layers) - split}/{len(layers)} encoder layers "
             f"(indices {split}–{len(layers)-1}), added {len(newly_unfrozen)} params to optimizer"
@@ -276,11 +293,14 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
 
         "spec_augment": {
             "_target_": "nemo.collections.asr.modules.SpectrogramAugmentation",
-            # Stronger augmentation reduces overfitting on limited samples
-            "freq_masks": 6,       # increased from 4
-            "freq_width": 30,      # increased from 27
-            "time_masks": 12,      # increased from 10
-            "time_width": 0.06,    # increased from 0.05
+            # Mild augmentation during Stage 1 — heavy masking on top of a frozen
+            # encoder corrupts the stable pretrained features and prevents the
+            # decoder from learning the CTC alignment at all (blank collapse).
+            # ThreeStageTrainingCallback increases these in Stage 2+.
+            "freq_masks": 2,
+            "freq_width": 15,
+            "time_masks": 3,
+            "time_width": 0.03,
         },
 
         "encoder": {
@@ -357,12 +377,14 @@ def build_ctc_model(vocab: list[str], train_manifest: str,
             "name": "adamw",
             "lr": LR_STAGE1_DECODER,
             "betas": [0.9, 0.98],
-            "weight_decay": 5e-4,  # increased from 1e-3 for better regularization
+            "weight_decay": 1e-4,
             "sched": {
                 "name": "CosineAnnealing",
-                "warmup_steps": 500,
-                "max_steps": 28000,  # ~275 steps/epoch × 100 epochs (11k samples, batch 40 effective)
-                "min_lr": 5e-7,
+                # Warmup and max_steps only active in Stage 2+ (scheduler disabled in Stage 1).
+                # ~275 steps/epoch × 100 epochs; warmup over ~1 epoch of Stage 2.
+                "warmup_steps": 275,
+                "max_steps": 28000,
+                "min_lr": 1e-6,
             },
         },
     })

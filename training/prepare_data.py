@@ -99,12 +99,18 @@ KEEP_LABELS = {"correct", None}
 _DIACRITICS = re.compile(
     u'[ً-ٰٟۖ-ۜ۟-۪ۤۧۨ-ۭ]'
 )
-_ALEF = re.compile(r'[آأإٱ]')
+_ALEF          = re.compile(r'[آأإٱ]')
+_UTHMANIC_ALEF = re.compile(r'ـٰ')  # Tatweel+SuperscriptAlef (RetaSy) -> becomes ا
+_TATWEEL       = re.compile(r'ـ')           # residual Tatweel/Kashida
+_FARSI_YEH     = re.compile(r'ی')           # Farsi Yeh U+06CC -> Arabic ي
 
 
 def normalize(text: str) -> str:
+    text = _UTHMANIC_ALEF.sub('ا', text)  # must run before diacritics strip removes U+0670
     text = _ALEF.sub('ا', text)
     text = _DIACRITICS.sub('', text)
+    text = _TATWEEL.sub('', text)
+    text = _FARSI_YEH.sub('ي', text)
     return ' '.join(text.split())
 
 
@@ -308,26 +314,28 @@ def process_tarteel(sample, idx, audio_dir, phonemizer):
     return (entry, assign_split(surah)) if entry else (None, "too_long_or_ctc")
 
 
-def _stream_dataset(name, hf_path, processor, add_entry, log_interval=500):
-    """Stream one HuggingFace dataset, process each sample, and add to manifests.
+def _stream_dataset(name, hf_path, processor, add_entry, log_interval=500,
+                    hf_splits=("train",)):
+    """Stream one or more HuggingFace splits, process each sample, add to manifests.
 
     Returns (n_processed, n_skipped).
     """
     n_processed = n_skipped = 0
-    try:
-        ds = load_dataset(hf_path, split="train", streaming=True)
-        ds = ds.cast_column("audio", datasets_Audio(decode=False))
-        print(f"\nLoading {name} dataset...")
-        for idx, sample in enumerate(ds):
-            entry, split = processor(sample, idx)
-            if entry is None or not add_entry(entry, split):
-                n_skipped += 1
-                continue
-            n_processed += 1
-            if n_processed % log_interval == 0:
-                print(f"  {name}: {n_processed} processed (scanned {idx + 1} total)...")
-    except Exception as e:
-        print(f"{name} load failed: {e}")
+    for hf_split in hf_splits:
+        try:
+            ds = load_dataset(hf_path, split=hf_split, streaming=True)
+            ds = ds.cast_column("audio", datasets_Audio(decode=False))
+            print(f"\nLoading {name} ({hf_split})...")
+            for idx, sample in enumerate(ds):
+                entry, split = processor(sample, idx)
+                if entry is None or not add_entry(entry, split):
+                    n_skipped += 1
+                    continue
+                n_processed += 1
+                if n_processed % log_interval == 0:
+                    print(f"  {name}: {n_processed} processed (scanned {idx + 1} total)...")
+        except Exception as e:
+            print(f"{name} ({hf_split}) load failed: {e}")
     print(f"{name} done: {n_processed} samples")
     return n_processed, n_skipped
 
@@ -382,17 +390,23 @@ def prepare_data(output_dir: str = "./data"):
         return True
 
     datasets = [
+        # (name, hf_path, processor, log_interval, hf_splits)
         ("RetaSy",    "RetaSy/quranic_audio_dataset",
-         lambda s, i: process_retasy(s, i, audio_dir, phonemizer, ayah_lookup), 100),
+         lambda s, i: process_retasy(s, i, audio_dir, phonemizer, ayah_lookup),
+         100, ("train",)),
+        # everyayah has train/validation/test splits — load all three so we get
+        # the full 100+ reciter diversity (~25k samples) instead of just 5k.
         ("everyayah", "tarteel-ai/everyayah",
-         lambda s, i: process_everyayah(s, i, audio_dir, phonemizer, ayah_lookup), 500),
+         lambda s, i: process_everyayah(s, i, audio_dir, phonemizer, ayah_lookup),
+         500, ("train", "validation", "test")),
         ("EA-UD",     "tarteel-ai/EA-UD",
-         lambda s, i: process_ea_ud(s, i, audio_dir, phonemizer, ayah_lookup), 500),
+         lambda s, i: process_ea_ud(s, i, audio_dir, phonemizer, ayah_lookup),
+         500, ("train",)),
     ]
 
     total_processed = total_skipped = 0
-    for name, hf_path, processor, log_interval in datasets:
-        n, s = _stream_dataset(name, hf_path, processor, add_entry, log_interval)
+    for name, hf_path, processor, log_interval, hf_splits in datasets:
+        n, s = _stream_dataset(name, hf_path, processor, add_entry, log_interval, hf_splits)
         total_processed += n
         total_skipped += s
 
