@@ -153,44 +153,26 @@ class ThreeStageTrainingCallback(Callback):
             f"(indices {split}–{len(layers)-1}), added {len(newly_unfrozen)} params to optimizer"
         )
 
-    STAGE3_WARMUP_STEPS = 1000
-
     def _enter_stage3(self, trainer, pl_module):
         pl_module.encoder.unfreeze()
 
-        # Disable the LR scheduler for Stage 3 — it conflicts with manual LR
-        # control during warmup and decays LRs too aggressively afterward.
+        # Kill the scheduler entirely — it's mid-cycle from Stage 2 and will
+        # keep computing cosine(global_step/max_steps), overriding our manual
+        # LRs every step. Setting frequency=99999 isn't enough because the
+        # scheduler still fires once before the check, and base_lrs doesn't
+        # reset the cosine position. Replacing last_epoch with a large value
+        # freezes it at min_lr, so we just disable firing altogether.
         for config in trainer.lr_scheduler_configs:
-            config.scheduler.base_lrs = [LR_STAGE3_DECODER, LR_STAGE3_DECODER]
-            config.interval = "epoch"
-            config.frequency = 99999  # effectively disabled
+            config.frequency = 99999
 
-        warmup_start_lr = LR_STAGE3_ENCODER * 0.1
-        _set_optimizer_lrs(trainer, warmup_start_lr, LR_STAGE3_DECODER * 0.1)
-        self._stage3_start_step = trainer.global_step
-        self._warming_up = True
+        # Set final LRs directly — no warmup needed, encoder LR is already
+        # low enough (1e-5) that a ramp doesn't help and adds complexity.
+        _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
 
         logging.info(
-            f"Stage 3: full encoder unfrozen — warming up over "
-            f"{self.STAGE3_WARMUP_STEPS} steps before full LRs "
-            f"(encoder={LR_STAGE3_ENCODER}, decoder={LR_STAGE3_DECODER})"
+            f"Stage 3: full encoder unfrozen — "
+            f"encoder LR={LR_STAGE3_ENCODER}, decoder LR={LR_STAGE3_DECODER} (scheduler disabled)"
         )
-
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
-        if not getattr(self, '_warming_up', False):
-            return
-        steps_since = trainer.global_step - self._stage3_start_step
-        if steps_since >= self.STAGE3_WARMUP_STEPS:
-            _set_optimizer_lrs(trainer, LR_STAGE3_ENCODER, LR_STAGE3_DECODER)
-            self._warming_up = False
-            logging.info("Stage 3: warmup complete — full LRs engaged")
-        else:
-            frac = steps_since / self.STAGE3_WARMUP_STEPS
-            _set_optimizer_lrs(
-                trainer,
-                LR_STAGE3_ENCODER * 0.1 + LR_STAGE3_ENCODER * 0.9 * frac,
-                LR_STAGE3_DECODER * 0.1 + LR_STAGE3_DECODER * 0.9 * frac,
-            )
 
     def on_train_epoch_start(self, trainer, pl_module):
         epoch = trainer.current_epoch
