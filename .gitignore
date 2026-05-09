@@ -1,18 +1,60 @@
 
-# Training data — audio files are large, stream from HuggingFace instead
+# =============================================================================
+# Training Data & Models
+# =============================================================================
+# Audio files are large, stream from HuggingFace/datasets instead
 training/data/
+training/*.tar.gz
 
-# Frontend dependencies
-frontend/node_modules/
-
-# Model files — stored privately on HuggingFace, never in git
+# Pre-trained models — stored privately on HuggingFace, never in git
 backend/model/model.onnx
 backend/model/model.int8.onnx
+backend/model/
 
-# Python cache
+# Training checkpoints and generated artifacts
+training/output*/
+training/test_output/
+training/checkpoints/
+training/alignments/
+training/**/*.ckpt
+training/**/*.nemo
+training/**/*.pt
+training/**/*.pth
+
+# =============================================================================
+# Frontend
+# =============================================================================
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# =============================================================================
+# Python
+# =============================================================================
 **/__pycache__/
 **/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+*.egg-info/
+dist/
+build/
 
-# Package lock
-frontend/package-lock.json
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# =============================================================================
+# Environment & System
+# =============================================================================
 .DS_Store
+.env
+.env.local
+*.log
+.venv/
+venv/
+
+# =============================================================================
+# Package Locks (use lock files in repo, not npm install)
+# =============================================================================
+frontend/package-lock.json
